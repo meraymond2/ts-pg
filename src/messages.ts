@@ -1,4 +1,6 @@
 /* Front End */
+export type FMessage = StartupMessage | PasswordMessage
+
 export type StartupMessage = {
   _tag: "StartupMessage"
   majorVersion: 3
@@ -20,9 +22,14 @@ export type PasswordMessage = {
   password: string
 }
 
-export type FMessage = StartupMessage | PasswordMessage
+export const PasswordMessage = (hashed: string): PasswordMessage => ({
+  _tag: "PasswordMessage",
+  password: hashed,
+})
 
 /* Back End */
+export type BMessage = AuthenticationMD5Password | AuthenticationOk
+
 export type AuthenticationMD5Password = {
   _tag: "AuthenticationMD5Password"
   salt: Uint8Array
@@ -33,4 +40,8 @@ export const AuthenticationMD5Password = (salt: Uint8Array): AuthenticationMD5Pa
   salt,
 })
 
-export type BMessage = AuthenticationMD5Password
+export type AuthenticationOk = {
+  _tag: "AuthenticationOk"
+}
+
+export const AuthenticationOk = (): AuthenticationOk => ({ _tag: "AuthenticationOk" })

@@ -1,8 +1,10 @@
-import { StartupMessage } from "./messages"
-import { Conn } from "./socket"
+import { Conn } from "./conn"
 
-const conn = new Conn()
+const conn = new Conn("root", "cervest", "assets")
 
 setTimeout(() => {
-  conn.send(StartupMessage("root", "assets"))
+  const res = conn.initialise()
+  res.then(() => {
+    console.log("done")
+  })
 }, 2000)
