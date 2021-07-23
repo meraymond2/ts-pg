@@ -106,5 +106,5 @@ conn.sendMsg("user", "root", "database", "assets") // + "database" + "assets")
 // 20e67ad0843e5c40157e0a0abdf8e0df
 // let passBuf =
 
-// https://www.postgresql.org/docs/current/protocol.html
-// https://www.postgresql.org/docs/current/protocol-message-formats.html
+//
+//

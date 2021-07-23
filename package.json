@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "npx esbuild src.ts --bundle --platform=node --outfile=out.js",
+    "build": "npx esbuild src/index.ts --bundle --platform=node --outfile=out.js",
     "start": "npm run build && node out.js"
   },
   "dependencies": {
