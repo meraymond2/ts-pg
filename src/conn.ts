@@ -27,7 +27,11 @@ export class Conn {
   }
 
   initialise = async (): Promise<void> => {
-    const socketConnected = new Promise<void>((res) => {
+    const socketConnected = new Promise<void>((res, rej) => {
+      this.sock.on("error" , (e) => {
+        console.error("!!!!!!!!!", e)
+        rej()
+      })
       this.sock.connect(5432, "localhost", () => {
         console.log("Connection opened")
         res()
