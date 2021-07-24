@@ -9,19 +9,14 @@ export class Conn {
   sock: Net.Socket
   state: State
 
-  constructor(user: string, password: string, database: string, onConnect: ConnectCallback) {
+  constructor(user: string, password: string, database: string) {
     let sock = new Net.Socket()
     const startingState: Uninitialised = {
       _tag: "Uninitialised",
       user,
       password,
       database,
-      onConnect,
     }
-
-    sock.connect(5432, "localhost", () => {
-      console.log("Connection opened")
-    })
 
     sock.on("data", this.receive)
 
@@ -31,10 +26,23 @@ export class Conn {
     this.state = startingState
   }
 
-  static initialise = async (user: string, password: string, database: string) =>
-    new Promise<void>((res) => {
-      new Conn(user, password, database, async () => res())
+  initialise = async (): Promise<void> => {
+    const socketConnected = new Promise<void>((res) => {
+      this.sock.connect(5432, "localhost", () => {
+        console.log("Connection opened")
+        res()
+      })
     })
+    await socketConnected
+    return new Promise((res, rej) => {
+      if (this.state._tag === "Uninitialised") {
+        this.send(StartupMessage(this.state.user, this.state.database))
+        this.state = sendStartup(this.state, async () => res())
+      } else {
+        rej()
+      }
+    })
+  }
 
   send = (msg: FMessage): void => {
     this.sock.write(serialise(msg), console.error)

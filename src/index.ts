@@ -1,9 +1,7 @@
 import { Conn } from "./conn"
 
-const conn = Conn.initialise("root", "cervest", "assets")
+const conn = new Conn("root", "cervest", "assets")
 
-console.log(conn)
-
-conn.then(() => {
+conn.initialise().then(() => {
   console.log(conn)
 })

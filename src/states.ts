@@ -8,7 +8,6 @@ export type Uninitialised = {
   user: string
   password: string
   database: string
-  onConnect: ConnectCallback
 }
 
 export type StartupSent = {
@@ -29,11 +28,11 @@ export type Authorised = {
 }
 
 /* Transitions */
-export const sendStartup = (state: Uninitialised): StartupSent => ({
+export const sendStartup = (state: Uninitialised, onConnect: ConnectCallback): StartupSent => ({
   _tag: "StartupSent",
   user: state.user,
   password: state.password,
-  onConnect: state.onConnect,
+  onConnect: onConnect,
 })
 
 export const receivePasswordReq = (state: StartupSent, authType: "md5"): PasswordRequested => ({
