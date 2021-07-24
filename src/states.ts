@@ -1,5 +1,4 @@
-import { Conn } from "./conn"
-import { StartupMessage } from "./messages"
+export type ConnectCallback = () => Promise<void>
 
 /* States */
 export type State = Uninitialised | StartupSent | PasswordRequested | Authorised
@@ -9,26 +8,20 @@ export type Uninitialised = {
   user: string
   password: string
   database: string
+  onConnect: ConnectCallback
 }
-
-export const Uninitialised = (user: string, password: string, database: string): Uninitialised => ({
-  _tag: "Uninitialised",
-  user,
-  password,
-  database,
-})
 
 export type StartupSent = {
   _tag: "StartupSent"
   user: string
   password: string
-  callback: () => Promise<void>
+  onConnect: ConnectCallback
 }
 
 export type PasswordRequested = {
   _tag: "PasswordRequested"
   authType: "md5"
-  callback: () => Promise<void>
+  onConnect: ConnectCallback
 }
 
 export type Authorised = {
@@ -36,15 +29,19 @@ export type Authorised = {
 }
 
 /* Transitions */
-export const sendStartup = (user: string, password: string, callback: () => Promise<void>): StartupSent => ({
+export const sendStartup = (state: Uninitialised): StartupSent => ({
   _tag: "StartupSent",
-  user,
-  password,
-  callback,
+  user: state.user,
+  password: state.password,
+  onConnect: state.onConnect,
 })
 
-export const receivePasswordReq = (callback: () => Promise<void>): PasswordRequested => ({
+export const receivePasswordReq = (state: StartupSent, authType: "md5"): PasswordRequested => ({
   _tag: "PasswordRequested",
-  authType: "md5",
-  callback,
+  authType,
+  onConnect: state.onConnect,
+})
+
+export const passwordAuthorised = (_state: PasswordRequested): Authorised => ({
+  _tag: "Authorised",
 })

@@ -1,10 +1,9 @@
 import { Conn } from "./conn"
 
-const conn = new Conn("root", "cervest", "assets")
+const conn = Conn.initialise("root", "cervest", "assets")
 
-setTimeout(() => {
-  const res = conn.initialise()
-  res.then(() => {
-    console.log("done")
-  })
-}, 2000)
+console.log(conn)
+
+conn.then(() => {
+  console.log(conn)
+})
