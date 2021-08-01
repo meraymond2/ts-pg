@@ -42,13 +42,14 @@ export class Socket {
       const msgBytes = remaining.slice(0, 1 + msgLength)
       const msg = Backend.deserialise(msgBytes)
       remaining = remaining.slice(1 + msgLength)
-
       if (this.listeningFor.includes(msg._tag) && this.callback) {
         // For now, assume well-behaved client, who waits for an answer before sending another request.
         const callback = this.callback
         this.callback = null
         this.listeningFor = []
         callback(msg)
+      } else {
+        console.log("Uncaught reply: ", msg)
       }
     }
   }

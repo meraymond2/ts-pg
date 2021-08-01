@@ -1,4 +1,4 @@
-export type Msg = StartupMessage
+export type Msg = StartupMessage | PasswordMessage
 
 export type StartupMessage = {
   _tag: "StartupMessage"
@@ -8,12 +8,17 @@ export type StartupMessage = {
   database: string
 }
 
+export type PasswordMessage = {
+  _tag: "PasswordMessage"
+  password: string
+}
+
 /******************************************************************************/
 
 export const serialise = (msg: Msg): Uint8Array => {
   switch (msg._tag) {
-    // case "PasswordMessage":
-    //   return serializePasswordMessage(msg)
+    case "PasswordMessage":
+      return serializePasswordMessage(msg)
     case "StartupMessage":
       return serialiseStartupMessage(msg)
   }
@@ -22,16 +27,16 @@ export const serialise = (msg: Msg): Uint8Array => {
 /**
  * Int8 'p'
  * Int32 Length
- * CString
+ * CString hashed password
  */
-// const serializePasswordMessage = (msg: PasswordMessage): Uint8Array => {
-//   const len = 4 + clen(msg.password)
-//   let buf = new Uint8Array(1 + len)
-//   buf[0] = "p".charCodeAt(0)
-//   spliceInt(buf, 1, len, 4)
-//   spliceStr(buf, 5, msg.password)
-//   return buf
-// }
+const serializePasswordMessage = (msg: PasswordMessage): Uint8Array => {
+  const len = 4 + clen(msg.password)
+  let buf = new Uint8Array(1 + len)
+  buf[0] = "p".charCodeAt(0)
+  spliceInt(buf, 1, len, 4)
+  spliceStr(buf, 5, msg.password)
+  return buf
+}
 
 /**
  * Int32 Length

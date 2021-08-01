@@ -1,5 +1,3 @@
-
-
 /* States */
 export type State = Uninitialised | PasswordRequested
 
@@ -7,11 +5,10 @@ export type Uninitialised = {
   _tag: "Uninitialised"
 }
 
-export type AuthenticationType = "md5"
-
 export type PasswordRequested = {
   _tag: "PasswordRequested"
-  authType: AuthenticationType
+  authType: "md5"
+  salt: Uint8Array
 }
 
 export type Authorised = {
