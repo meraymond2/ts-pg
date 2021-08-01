@@ -28,7 +28,8 @@ export type BackendKeyData = {
   secretKey: number
 }
 
-type TransactionStatus = "I" | "T" | "E"
+// idle, in transaction block, in failed transaction block
+export type TransactionStatus = "I" | "T" | "E"
 
 export type ReadyForQuery = {
   _tag: "ReadyForQuery"

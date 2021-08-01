@@ -1,3 +1,5 @@
+import { TransactionStatus } from "./backend-messages"
+
 /* States */
 export type State = Uninitialised | PasswordRequested
 
@@ -11,6 +13,14 @@ export type PasswordRequested = {
   salt: Uint8Array
 }
 
-export type Authorised = {
-  _tag: "Authorised"
+type CancellationKey = {
+  pid: number
+  key: number
+}
+
+export type ReadyForQuery = {
+  _tag: "ReadyForQuery"
+  runtimeParams: Record<string, string>
+  cancellationKey: CancellationKey
+  transactionStatus: TransactionStatus
 }
