@@ -1,6 +1,7 @@
 {
   "scripts": {
     "build": "npx esbuild src/index.ts --bundle --platform=node --outfile=out.js",
+    "check": "tsc src/* --noEmit --strict",
     "start": "npm run build && node out.js"
   },
   "dependencies": {

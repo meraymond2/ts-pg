@@ -1,7 +1,9 @@
 export type Msg = AuthenticationMD5Password
 
+export type MsgType = "AuthenticationMD5Password"
+
 export type AuthenticationMD5Password = {
-  _tag: "AuthenticationMD5Password"
+  _tag: MsgType
   salt: Uint8Array
 }
 

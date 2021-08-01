@@ -4,6 +4,8 @@ import * as Frontend from "./frontend-messages"
 
 export class Socket {
   sock: Net.Socket
+  callback: null | ((msg: Backend.Msg) => void)
+  listeningFor: Backend.MsgType[]
 
   constructor() {
     let sock = new Net.Socket()
@@ -11,7 +13,10 @@ export class Socket {
     sock.on("data", this.receive)
 
     sock.on("close", () => console.log("Socket closed."))
+
     this.sock = sock
+    this.callback = null
+    this.listeningFor = []
   }
 
   init = async (): Promise<void> =>
@@ -24,7 +29,9 @@ export class Socket {
       })
     })
 
-  send = (msg: Frontend.Msg): void => {
+  send = (msg: Frontend.Msg, callback: (msg: Backend.Msg) => void, on: Backend.MsgType[]): void => {
+    this.callback = callback
+    this.listeningFor = on
     this.sock.write(Frontend.serialise(msg), (error) => error && console.error(`Failed to write to socket: ${error}`))
   }
 
@@ -35,8 +42,14 @@ export class Socket {
       const msgBytes = remaining.slice(0, 1 + msgLength)
       const msg = Backend.deserialise(msgBytes)
       remaining = remaining.slice(1 + msgLength)
-      // this.dispatch(deserialise(msgBytes))
-      console.log("Received: " + JSON.stringify(msg))
+
+      if (this.listeningFor.includes(msg._tag) && this.callback) {
+        // For now, assume well-behaved client, who waits for an answer before sending another request.
+        const callback = this.callback
+        this.callback = null
+        this.listeningFor = []
+        callback(msg)
+      }
     }
   }
 }
