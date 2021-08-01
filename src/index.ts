@@ -1,10 +1,14 @@
-import { Conn } from "./conn"
+import { Socket } from "./socket"
+import { State } from "./states"
+import { sendStartup } from "./transitions"
 
-const conn = new Conn("root", "cervest", "assets")
+const start: State = {
+  _tag: "Uninitialised",
+}
 
-conn
-  .initialise()
-  .then(() => {
-    console.log(conn)
-  })
-  .catch(() => console.log("oh no"))
+const socket = new Socket()
+
+socket
+  .init()
+  .then(() => sendStartup(start, socket))
+  .then(console.log)
