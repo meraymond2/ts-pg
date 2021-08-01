@@ -1,3 +1,9 @@
+To do:
+- Node should have a UTF8 text encoder built in. Should use that instead from String.fromCharCode.
+- Handle no-password and clear-text password auth. Check how complicated the sha256 auth is (and what RDS uses).
+- See about handling some error messages, such as bad user, password, dbname.
+- Remove hard-coded user/password/host/dbname/port and use config.
+
 # Running Locally
 ```
 # MD5 Auth
