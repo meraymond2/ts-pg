@@ -1,6 +1,7 @@
 import * as Net from "net"
 import * as Backend from "./backend-messages"
 import * as Frontend from "./frontend-messages"
+import { bytesToInt } from "./utils"
 
 export class Socket {
   sock: Net.Socket
@@ -48,11 +49,8 @@ export class Socket {
         this.callback = null
         this.listeningFor = []
         callback(msg)
-      } else {
-        console.log("Uncaught reply: ", msg)
       }
+      console.log("Debug: ", msg)
     }
   }
 }
-
-const bytesToInt = (bytes: Uint8Array): number => (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]

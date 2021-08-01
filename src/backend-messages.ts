@@ -1,6 +1,13 @@
-export type Msg = AuthenticationMD5Password | AuthenticationOk | ParameterStatus
+import { bytesToInt } from "./utils"
 
-export type MsgType = "AuthenticationMD5Password" | "AuthenticationOk" | "ParameterStatus"
+export type Msg = AuthenticationMD5Password | AuthenticationOk | ParameterStatus | BackendKeyData | ReadyForQuery
+
+export type MsgType =
+  | "AuthenticationMD5Password"
+  | "AuthenticationOk"
+  | "ParameterStatus"
+  | "BackendKeyData"
+  | "ReadyForQuery"
 
 export type AuthenticationMD5Password = {
   _tag: "AuthenticationMD5Password"
@@ -15,11 +22,26 @@ export type ParameterStatus = {
   value: string
 }
 
+export type BackendKeyData = {
+  _tag: "BackendKeyData"
+  pid: number
+  secretKey: number
+}
+
+type TransactionStatus = "I" | "T" | "E"
+
+export type ReadyForQuery = {
+  _tag: "ReadyForQuery"
+  status: TransactionStatus
+}
+
 /******************************************************************************/
 
 export const deserialise = (bytes: Uint8Array): Msg => {
   const msgType = String.fromCharCode(bytes[0])
   switch (msgType) {
+    case "K":
+      return deserialiseBackendKeyData(bytes)
     case "R":
       const authMsgType = bytes[8]
       switch (authMsgType) {
@@ -32,6 +54,8 @@ export const deserialise = (bytes: Uint8Array): Msg => {
       }
     case "S":
       return deserialiseParameterStatus(bytes)
+    case "Z":
+      return deserialiseReadyForQuery(bytes)
     default:
       throw Error("Unimplemented message type " + msgType)
   }
@@ -68,11 +92,11 @@ const deserialiseParameterStatus = (bytes: Uint8Array): ParameterStatus => {
   let start = 5
   let end = start
   while (bytes[end] !== 0x00) end++
-  const name = String.fromCharCode.apply(null, bytes.slice(start, end))
+  const name = bytesToAscii(bytes.slice(start, end))
   start = end + 1
   end = start
   while (bytes[end] !== 0x00) end++
-  const value = String.fromCharCode.apply(null, bytes.slice(start, end))
+  const value = bytesToAscii(bytes.slice(start, end))
   return {
     _tag: "ParameterStatus",
     name,
@@ -80,4 +104,28 @@ const deserialiseParameterStatus = (bytes: Uint8Array): ParameterStatus => {
   }
 }
 
+/**
+ * Int8 'K'
+ * Int32 Length
+ * Int32 Process Id
+ * Int32 Secret Key
+ */
+const deserialiseBackendKeyData = (bytes: Uint8Array): BackendKeyData => ({
+  _tag: "BackendKeyData",
+  pid: bytesToInt(bytes.slice(5, 9)),
+  secretKey: bytesToInt(bytes.slice(9, 13)),
+})
+
+/**
+ * Int8 'Z'
+ * Int32 Length
+ * Int8 Status
+ */
+const deserialiseReadyForQuery = (bytes: Uint8Array): ReadyForQuery => ({
+  _tag: "ReadyForQuery",
+  status: String.fromCharCode(bytes[5]) as TransactionStatus,
+})
+
 /******************************************************************************/
+
+const bytesToAscii = (bytes: Uint8Array): string => String.fromCharCode.apply(null, bytes as unknown as number[]) // sigh, TS

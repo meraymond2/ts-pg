@@ -11,3 +11,6 @@ export const hashMd5 = (user: string, password: string, salt: Uint8Array): strin
   hashed = hash.end() as string
   return "md5" + hashed
 }
+
+export const bytesToInt = (bytes: Uint8Array): number =>
+  (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]
