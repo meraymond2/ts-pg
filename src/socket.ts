@@ -1,7 +1,7 @@
 import * as Net from "net"
 import * as Backend from "./backend-messages"
 import * as Frontend from "./frontend-messages"
-import { bytesToInt, log } from "./utils"
+import { bytesToInt32, log } from "./utils"
 
 export class Socket {
   debug: boolean
@@ -43,7 +43,7 @@ export class Socket {
   receive = (bytes: Uint8Array): void => {
     let remaining = bytes
     while (remaining.length > 0) {
-      const msgLength = bytesToInt(remaining.slice(1, 5))
+      const msgLength = bytesToInt32(remaining.slice(1, 5))
       const msgBytes = remaining.slice(0, 1 + msgLength)
       const msg = Backend.deserialise(msgBytes)
       remaining = remaining.slice(1 + msgLength)

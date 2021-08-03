@@ -80,3 +80,19 @@ const buildReadyForQuery = (msgs: Backend.Msg[]): ReadyForQuery =>
     },
     { _tag: "ReadyForQuery", runtimeParams: {}, cancellationKey: { pid: -1, key: -1 }, transactionStatus: "E" }
   )
+
+export const sendQuery = async (state: ReadyForQuery, query: string, socket: Socket): Promise<ReadyForQuery> => {
+  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) =>
+    socket.send(
+      {
+        _tag: "Query",
+        query,
+      },
+      res,
+      ["ReadyForQuery"]
+    )
+  )
+  const replies = await repliesFuture
+  console.log("here: ", replies)
+  return state // not really
+}

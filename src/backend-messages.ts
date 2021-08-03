@@ -1,4 +1,4 @@
-import { bytesToInt } from "./utils"
+import { bytesToInt16, bytesToInt32 } from "./utils"
 
 export type Msg =
   | AuthenticationMD5Password
@@ -7,6 +7,7 @@ export type Msg =
   | ParameterStatus
   | BackendKeyData
   | ReadyForQuery
+  | RowDescription
   | ErrorResponse
 
 export type MsgType =
@@ -16,6 +17,7 @@ export type MsgType =
   | "ParameterStatus"
   | "BackendKeyData"
   | "ReadyForQuery"
+  | "RowDescription"
   | "ErrorResponse"
 
 export type AuthenticationMD5Password = {
@@ -49,6 +51,24 @@ export type ReadyForQuery = {
   status: TransactionStatus
 }
 
+// I still haven’t answered my question as to how you identify the type. You can
+// look them up `SELECT * FROM pg_type WHERE oid = 25;` but I don’t know if they
+// are stable enough to be able to skip that. Presumably.
+type FieldDescription = {
+  fieldName: string
+  tableOid: number
+  column: number
+  dataTypeOid: number
+  dataTypeSize: number
+  typeModifier: number
+  formatCode: "text" | "binary"
+}
+
+export type RowDescription = {
+  _tag: "RowDescription"
+  fields: FieldDescription[]
+}
+
 export type ErrorResponse = {
   _tag: "ErrorResponse"
   fields: Record<string, string>
@@ -77,6 +97,8 @@ export const deserialise = (bytes: Uint8Array): Msg => {
       }
     case "S":
       return deserialiseParameterStatus(bytes)
+    case "T":
+      return deserialiseRowDescription(bytes)
     case "Z":
       return deserialiseReadyForQuery(bytes)
     default:
@@ -144,8 +166,8 @@ const deserialiseParameterStatus = (bytes: Uint8Array): ParameterStatus => {
  */
 const deserialiseBackendKeyData = (bytes: Uint8Array): BackendKeyData => ({
   _tag: "BackendKeyData",
-  pid: bytesToInt(bytes.slice(5, 9)),
-  secretKey: bytesToInt(bytes.slice(9, 13)),
+  pid: bytesToInt32(bytes.slice(5, 9)),
+  secretKey: bytesToInt32(bytes.slice(9, 13)),
 })
 
 /**
@@ -157,6 +179,50 @@ const deserialiseReadyForQuery = (bytes: Uint8Array): ReadyForQuery => ({
   _tag: "ReadyForQuery",
   status: String.fromCharCode(bytes[5]) as TransactionStatus,
 })
+
+/**
+ * Int8 'T'
+ * Int32 Length
+ * Int16 Number of Fields
+ *
+ * String Field Name
+ * Int32 Table OID
+ * Int16 Column #
+ * Int32 Data Type OID
+ * Int16 Data Type Size
+ * Int32 Type Modifier
+ * Int16 Format Code
+ */
+const deserialiseRowDescription = (bytes: Uint8Array): RowDescription => {
+  let fields: FieldDescription[] = []
+  let idx = 7
+  while (idx < bytes.length) {
+    const start = idx
+    while (bytes[idx] !== 0x00) idx++
+    const fieldName = bytesToString(bytes.slice(start, idx))
+    idx++ // null terminator
+    const tableOid = bytesToInt32(bytes.slice(idx, idx + 4))
+    const column = bytesToInt16(bytes.slice(idx + 4, idx + 6))
+    const dataTypeOid = bytesToInt32(bytes.slice(idx + 6, idx + 10))
+    const dataTypeSize = bytesToInt16(bytes.slice(idx + 10, idx + 12))
+    const typeModifier = bytesToInt32(bytes.slice(idx + 12, idx + 16))
+    const formatCode = bytesToInt16(bytes.slice(idx + 16, idx + 18))
+    idx += 18
+    fields.push({
+      fieldName,
+      tableOid,
+      column,
+      dataTypeOid,
+      dataTypeSize,
+      typeModifier,
+      formatCode: formatCode === 0 ? "text" : "binary",
+    })
+  }
+  return {
+    _tag: "RowDescription",
+    fields,
+  }
+}
 
 /**
  * Int8 'E'
