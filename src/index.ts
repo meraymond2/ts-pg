@@ -6,9 +6,10 @@ const start: State = {
   _tag: "Uninitialised",
 }
 
-const socket = new Socket()
+const socket = new Socket(true)
 
 socket
   .init()
   .then(() => sendStartup(start, socket))
-  .then((state) => sendPassword(state, socket))
+  .then((state) => (state._tag === "ReadyForQuery" ? state : sendPassword(state, socket)))
+  .then(console.log)

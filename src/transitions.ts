@@ -3,8 +3,11 @@ import { PasswordRequested, ReadyForQuery, Uninitialised } from "./states"
 import { Socket } from "./socket"
 import { hashMd5 } from "./utils"
 
-export const sendStartup = async (_state: Uninitialised, socket: Socket): Promise<PasswordRequested> => {
-  const replyFuture: Promise<Backend.Msg[]> = new Promise(async (res) =>
+export const sendStartup = async (
+  _state: Uninitialised,
+  socket: Socket
+): Promise<PasswordRequested | ReadyForQuery> => {
+  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) =>
     socket.send(
       {
         _tag: "StartupMessage",
@@ -14,20 +17,25 @@ export const sendStartup = async (_state: Uninitialised, socket: Socket): Promis
         user: "michael",
       },
       res,
-      ["AuthenticationMD5Password"]
+      ["AuthenticationMD5Password", "AuthenticationCleartextPassword", "ReadyForQuery"]
     )
   )
-  const reply = await replyFuture
-  if (reply.length > 1) throw Error("Got more messages than expected.")
-
-  const msg = reply[0]
-  switch (msg._tag) {
+  const replies = await repliesFuture
+  const first = replies[0]
+  switch (first._tag) {
     case "AuthenticationMD5Password":
       return {
         _tag: "PasswordRequested",
         authType: "md5",
-        salt: msg.salt,
+        salt: first.salt,
       }
+    case "AuthenticationCleartextPassword":
+      return {
+        _tag: "PasswordRequested",
+        authType: "clear-text",
+      }
+    case "AuthenticationOk":
+      return buildReadyForQuery(replies)
     default:
       throw Error("Unreachable")
   }
@@ -38,14 +46,18 @@ export const sendPassword = async (state: PasswordRequested, socket: Socket): Pr
     socket.send(
       {
         _tag: "PasswordMessage",
-        password: hashMd5("michael", "cascat", state.salt),
+        password: state.authType === "md5" ? hashMd5("michael", "cascat", state.salt) : "cascat",
       },
       res,
       ["ReadyForQuery"]
     )
   )
   const replies = await repliesFuture
-  return replies.reduce<ReadyForQuery>(
+  return buildReadyForQuery(replies)
+}
+
+const buildReadyForQuery = (msgs: Backend.Msg[]): ReadyForQuery =>
+  msgs.reduce<ReadyForQuery>(
     (acc, msg) => {
       switch (msg._tag) {
         case "ParameterStatus":
@@ -68,4 +80,3 @@ export const sendPassword = async (state: PasswordRequested, socket: Socket): Pr
     },
     { _tag: "ReadyForQuery", runtimeParams: {}, cancellationKey: { pid: -1, key: -1 }, transactionStatus: "E" }
   )
-}

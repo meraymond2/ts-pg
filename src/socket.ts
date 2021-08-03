@@ -4,18 +4,20 @@ import * as Frontend from "./frontend-messages"
 import { bytesToInt, log } from "./utils"
 
 export class Socket {
+  debug: boolean
   sock: Net.Socket
   resolve: null | ((msg: Backend.Msg[]) => void)
   msgs: Backend.Msg[]
   until: Backend.MsgType[]
 
-  constructor() {
+  constructor(debug: boolean = false) {
     let sock = new Net.Socket()
 
     sock.on("data", this.receive)
 
     sock.on("close", () => log.info("Socket closed."))
 
+    this.debug = debug
     this.sock = sock
     this.resolve = null
     this.msgs = []
@@ -45,6 +47,7 @@ export class Socket {
       const msgBytes = remaining.slice(0, 1 + msgLength)
       const msg = Backend.deserialise(msgBytes)
       remaining = remaining.slice(1 + msgLength)
+      if (this.debug) log.info(msg)
       if (this.until.includes(msg._tag) && this.resolve) {
         // For now, assume well-behaved client, who waits for an answer before sending another request.
         // Later, I'll see if it's possible to break this.
