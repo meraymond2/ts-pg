@@ -8,6 +8,8 @@ export type Msg =
   | BackendKeyData
   | ReadyForQuery
   | RowDescription
+  | DataRow
+  | Close
   | ErrorResponse
 
 export type MsgType =
@@ -18,6 +20,8 @@ export type MsgType =
   | "BackendKeyData"
   | "ReadyForQuery"
   | "RowDescription"
+  | "DataRow"
+  | "Close"
   | "ErrorResponse"
 
 export type AuthenticationMD5Password = {
@@ -69,6 +73,17 @@ export type RowDescription = {
   fields: FieldDescription[]
 }
 
+export type DataRow = {
+  _tag: "DataRow"
+  values: Array<string | null>
+}
+
+export type Close = {
+  _tag: "Close"
+  type: "statement" | "portal"
+  name: string
+}
+
 export type ErrorResponse = {
   _tag: "ErrorResponse"
   fields: Record<string, string>
@@ -79,6 +94,10 @@ export type ErrorResponse = {
 export const deserialise = (bytes: Uint8Array): Msg => {
   const msgType = String.fromCharCode(bytes[0])
   switch (msgType) {
+    case "C":
+      return deserialiseClose(bytes)
+    case "D":
+      return deserialiseDataRow(bytes)
     case "E":
       return deserialiseErrorResponse(bytes)
     case "K":
@@ -221,6 +240,49 @@ const deserialiseRowDescription = (bytes: Uint8Array): RowDescription => {
   return {
     _tag: "RowDescription",
     fields,
+  }
+}
+
+/**
+ * Int8 'D'
+ * Int32 Length
+ * Int16 Number of Values
+ *
+ * Int32 Value Length (NULL is -1)
+ * Bytes Column Value
+ */
+const deserialiseDataRow = (bytes: Uint8Array): DataRow => {
+  let values: string[] = []
+  let idx = 7
+
+  while (idx < bytes.length) {
+    const valLen = bytesToInt32(bytes.slice(idx, idx + 4))
+    idx += 4
+    const val = bytesToString(bytes.slice(idx, idx + valLen))
+    idx += valLen
+    values.push(val)
+  }
+
+  return {
+    _tag: "DataRow",
+    values,
+  }
+}
+
+/**
+ * Int8 'C'
+ * Int32 Length
+ * Int8 'S' (Stmt) or 'P' (Portal)
+ * String Name
+ */
+const deserialiseClose = (bytes: Uint8Array): Close => {
+  const type = bytesToString(bytes.slice(5, 6)) === "S" ? "statement" : "portal"
+  // The name appears to include the fifth byte.
+  const name = bytesToString(bytes.slice(5, bytes.length - 1))
+  return {
+    _tag: "Close",
+    type,
+    name,
   }
 }
 

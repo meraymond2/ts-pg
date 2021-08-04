@@ -1,5 +1,8 @@
 To do:
 - Remove hard-coded user/password/host/dbname/port and use config.
+- Return the query result — the FSM attempt isn't working well here, because the results are a side effect of going from Ready -> Ready.
+- Figure out if I can get the results in binary rather than text, it feels a little inefficient.
+- Figure out how I can map type-ids to types, so I can parse the results.
 
 # Running Locally
 ```
