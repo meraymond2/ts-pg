@@ -93,6 +93,5 @@ export const sendQuery = async (state: ReadyForQuery, query: string, socket: Soc
     )
   )
   const replies = await repliesFuture
-  console.log("here: ", replies)
   return state // not really
 }
