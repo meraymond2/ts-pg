@@ -1,14 +1,13 @@
 import * as Net from "net"
 import * as Backend from "./backend-messages"
 import * as Frontend from "./frontend-messages"
+import { Channel } from "./channel"
 import { bytesToInt32, log } from "./utils"
 
 export class Socket {
   debug: boolean
   sock: Net.Socket
-  resolve: null | ((msg: Backend.Msg[]) => void)
-  msgs: Backend.Msg[]
-  until: Backend.MsgType[]
+  outChannel: null | Channel<Backend.Msg>
 
   constructor(debug: boolean = false) {
     let sock = new Net.Socket()
@@ -19,9 +18,7 @@ export class Socket {
 
     this.debug = debug
     this.sock = sock
-    this.resolve = null
-    this.msgs = []
-    this.until = []
+    this.outChannel = null
   }
 
   init = async (): Promise<void> =>
@@ -34,9 +31,8 @@ export class Socket {
       })
     })
 
-  send = (msg: Frontend.Msg, resolve: (msg: Backend.Msg[]) => void, until: Backend.MsgType[]): void => {
-    this.resolve = resolve
-    this.until = until
+  send = (msg: Frontend.Msg, outChannel: Channel<Backend.Msg>): void => {
+    this.outChannel = outChannel
     this.sock.write(Frontend.serialise(msg), (error) => error && log.error(`Failed to write to socket: ${error}`))
   }
 
@@ -48,20 +44,7 @@ export class Socket {
       const msg = Backend.deserialise(msgBytes)
       remaining = remaining.slice(1 + msgLength)
       if (this.debug) log.info(msg)
-      if (this.until.includes(msg._tag) && this.resolve) {
-        // For now, assume well-behaved client, who waits for an answer before sending another request.
-        // Later, I'll see if it's possible to break this.
-        const resolve = this.resolve
-        const msgs = this.msgs.concat(msg)
-        this.resolve = null
-        this.msgs = []
-        this.until = []
-        resolve(msgs)
-      } else if (this.resolve) {
-        this.msgs.push(msg)
-      } else {
-        log.error("Uncaught message: ", msg)
-      }
+      this.outChannel.push(msg)
     }
   }
 }

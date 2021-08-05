@@ -2,23 +2,28 @@ import * as Backend from "./backend-messages"
 import { PasswordRequested, ReadyForQuery, Uninitialised } from "./states"
 import { Socket } from "./socket"
 import { hashMd5 } from "./utils"
+import { Channel } from "./channel"
 
 export const sendStartup = async (
   _state: Uninitialised,
   socket: Socket
 ): Promise<PasswordRequested | ReadyForQuery> => {
-  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) =>
-    socket.send(
-      {
-        _tag: "StartupMessage",
-        database: "dbname",
-        majorVersion: 3,
-        minorVersion: 0,
-        user: "michael",
-      },
-      res,
-      ["AuthenticationMD5Password", "AuthenticationCleartextPassword", "ReadyForQuery"]
-    )
+  const terminals = ["AuthenticationMD5Password", "AuthenticationCleartextPassword", "ReadyForQuery"]
+  let out = new Channel<Backend.Msg>()
+  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) => {
+    out.onPush = (msg) => {
+      if (terminals.includes(msg._tag)) res(out.items)
+    }
+  })
+  socket.send(
+    {
+      _tag: "StartupMessage",
+      database: "dbname",
+      majorVersion: 3,
+      minorVersion: 0,
+      user: "michael",
+    },
+    out
   )
   const replies = await repliesFuture
   const first = replies[0]
@@ -42,15 +47,19 @@ export const sendStartup = async (
 }
 
 export const sendPassword = async (state: PasswordRequested, socket: Socket): Promise<ReadyForQuery> => {
-  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) =>
-    socket.send(
-      {
-        _tag: "PasswordMessage",
-        password: state.authType === "md5" ? hashMd5("michael", "cascat", state.salt) : "cascat",
-      },
-      res,
-      ["ReadyForQuery"]
-    )
+  const terminals = ["ReadyForQuery"]
+  let out = new Channel<Backend.Msg>()
+  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) => {
+    out.onPush = (msg) => {
+      if (terminals.includes(msg._tag)) res(out.items)
+    }
+  })
+  socket.send(
+    {
+      _tag: "PasswordMessage",
+      password: state.authType === "md5" ? hashMd5("michael", "cascat", state.salt) : "cascat",
+    },
+    out
   )
   const replies = await repliesFuture
   return buildReadyForQuery(replies)
@@ -81,18 +90,21 @@ const buildReadyForQuery = (msgs: Backend.Msg[]): ReadyForQuery =>
     { _tag: "ReadyForQuery", runtimeParams: {}, cancellationKey: { pid: -1, key: -1 }, transactionStatus: "E" }
   )
 
-export const sendQuery = async (state: ReadyForQuery, query: string, socket: Socket): Promise<ReadyForQuery> => {
-  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) =>
-    socket.send(
-      {
-        _tag: "Query",
-        query,
-      },
-      res,
-      ["ReadyForQuery"]
-    )
+export const sendQuery = async (_state: ReadyForQuery, query: string, socket: Socket): Promise<ReadyForQuery> => {
+  const terminals = ["ReadyForQuery"]
+  let out = new Channel<Backend.Msg>()
+  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) => {
+    out.onPush = (msg) => {
+      if (terminals.includes(msg._tag)) res(out.items)
+    }
+  })
+  socket.send(
+    {
+      _tag: "Query",
+      query,
+    },
+    out
   )
   const replies = await repliesFuture
-  console.log("here: ", replies)
-  return state // not really
+  return _state
 }
