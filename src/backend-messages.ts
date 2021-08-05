@@ -258,9 +258,13 @@ const deserialiseDataRow = (bytes: Uint8Array): DataRow => {
   while (idx < bytes.length) {
     const valLen = bytesToInt32(bytes.slice(idx, idx + 4))
     idx += 4
-    const val = bytesToString(bytes.slice(idx, idx + valLen))
-    idx += valLen
-    values.push(val)
+    if (valLen === -1) {
+      values.push(null)
+    } else {
+      const val = bytesToString(bytes.slice(idx, idx + valLen))
+      idx += valLen
+      values.push(val)
+    }
   }
 
   return {
