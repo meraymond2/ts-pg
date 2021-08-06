@@ -1,37 +1,17 @@
 import * as Backend from "./backend-messages"
 import { PasswordRequested, ReadyForQuery, Uninitialised } from "./states"
-import { Socket } from "./socket"
-import { hashMd5 } from "./utils"
-import { Channel } from "./channel"
 
-export const sendStartup = async (
-  _state: Uninitialised,
-  socket: Socket
-): Promise<PasswordRequested | ReadyForQuery> => {
-  const terminals = ["AuthenticationMD5Password", "AuthenticationCleartextPassword", "ReadyForQuery"]
-  let out = new Channel<Backend.Msg>()
-  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) => {
-    out.onPush = (msg) => {
-      if (terminals.includes(msg._tag)) res(out.items)
-    }
-  })
-  socket.send(
-    {
-      _tag: "StartupMessage",
-      database: "dbname",
-      majorVersion: 3,
-      minorVersion: 0,
-      user: "michael",
-    },
-    out
-  )
-  const replies = await repliesFuture
-  const first = replies[0]
+export const fromUnitialised = (
+  state: Uninitialised,
+  msgs: Backend.Msg[]
+): PasswordRequested | ReadyForQuery => {
+  const first = msgs[0]
   switch (first._tag) {
     case "AuthenticationMD5Password":
       return {
         _tag: "PasswordRequested",
         authType: "md5",
+        user: state.user,
         salt: first.salt,
       }
     case "AuthenticationCleartextPassword":
@@ -40,30 +20,16 @@ export const sendStartup = async (
         authType: "clear-text",
       }
     case "AuthenticationOk":
-      return buildReadyForQuery(replies)
+      return buildReadyForQuery(msgs)
     default:
       throw Error("Unreachable")
   }
 }
 
-export const sendPassword = async (state: PasswordRequested, socket: Socket): Promise<ReadyForQuery> => {
-  const terminals = ["ReadyForQuery"]
-  let out = new Channel<Backend.Msg>()
-  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) => {
-    out.onPush = (msg) => {
-      if (terminals.includes(msg._tag)) res(out.items)
-    }
-  })
-  socket.send(
-    {
-      _tag: "PasswordMessage",
-      password: state.authType === "md5" ? hashMd5("michael", "cascat", state.salt) : "cascat",
-    },
-    out
-  )
-  const replies = await repliesFuture
-  return buildReadyForQuery(replies)
-}
+export const fromPasswordRequested = (
+  _state: PasswordRequested,
+  msgs: Backend.Msg[]
+): ReadyForQuery => buildReadyForQuery(msgs)
 
 const buildReadyForQuery = (msgs: Backend.Msg[]): ReadyForQuery =>
   msgs.reduce<ReadyForQuery>(
@@ -87,24 +53,10 @@ const buildReadyForQuery = (msgs: Backend.Msg[]): ReadyForQuery =>
           throw Error("Unexpected msg: " + JSON.stringify(msg))
       }
     },
-    { _tag: "ReadyForQuery", runtimeParams: {}, cancellationKey: { pid: -1, key: -1 }, transactionStatus: "E" }
-  )
-
-export const sendQuery = async (_state: ReadyForQuery, query: string, socket: Socket): Promise<ReadyForQuery> => {
-  const terminals = ["ReadyForQuery"]
-  let out = new Channel<Backend.Msg>()
-  const repliesFuture: Promise<Backend.Msg[]> = new Promise(async (res) => {
-    out.onPush = (msg) => {
-      if (terminals.includes(msg._tag)) res(out.items)
-    }
-  })
-  socket.send(
     {
-      _tag: "Query",
-      query,
-    },
-    out
+      _tag: "ReadyForQuery",
+      runtimeParams: {},
+      cancellationKey: { pid: -1, key: -1 },
+      transactionStatus: "E",
+    }
   )
-  const replies = await repliesFuture
-  return _state
-}

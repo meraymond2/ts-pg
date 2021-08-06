@@ -252,7 +252,7 @@ const deserialiseRowDescription = (bytes: Uint8Array): RowDescription => {
  * Bytes Column Value
  */
 const deserialiseDataRow = (bytes: Uint8Array): DataRow => {
-  let values: string[] = []
+  let values: Array<string | null> = []
   let idx = 7
 
   while (idx < bytes.length) {

@@ -1,16 +1,13 @@
-import { Socket } from "./socket"
-import { State } from "./states"
-import { sendStartup, sendPassword, sendQuery } from "./transitions"
+import { Connection as Conn } from "./connection"
 
-const start: State = {
-  _tag: "Uninitialised",
-}
+const conn = Conn.init({
+  host: "localhost",
+  port: 5432,
+  database: "dbname",
+  user: "michael",
+  password: "cascat",
+})
 
-const socket = new Socket(true)
-
-socket
-  .init()
-  .then(() => sendStartup(start, socket))
-  .then((state) => (state._tag === "ReadyForQuery" ? state : sendPassword(state, socket)))
-  .then((state) => sendQuery(state, "SELECT * FROM cats", socket))
-  .then(console.log)
+conn.then((conn) => {
+  conn.query("SELECT * FROM pg_type").then(console.log)
+})
