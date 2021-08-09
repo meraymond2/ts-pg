@@ -31,6 +31,10 @@ export class Connection {
     return msgs
   }
 
+  close = (): void => {
+    this.channel.close()
+  }
+
   static async init(config: Config): Promise<Connection> {
     const conn = new Connection(config.user, config.database)
     await conn.channel.init(config.host, config.port)

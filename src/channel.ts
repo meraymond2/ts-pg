@@ -7,6 +7,7 @@ type ReadCallback = (msg: Backend.Msg) => void
 
 export class Channel {
   private debug: boolean
+  private buffer: Uint8Array
   private outBuffer: Backend.Msg[]
   private socket: Net.Socket
   private waitingQueue: ReadCallback[]
@@ -20,6 +21,7 @@ export class Channel {
 
     this.debug = debug
     this.socket = socket
+    this.buffer = new Uint8Array()
     this.outBuffer = []
     this.waitingQueue = []
   }
@@ -50,14 +52,16 @@ export class Channel {
       }
     })
 
+  close = (): void => {
+    this.socket.destroy()
+  }
+
   private parseData = (bytes: Uint8Array): void => {
-    let remaining = bytes
-    // TODO: handle partial messages.
-    // Probably needs a byte buffer where it can store parts of messages
-    // until it has enough to form a whole one. Currently in large queries
-    // it will cut off halfway and break the deserialiser.
-    while (remaining.length > 0) {
+    let remaining = Buffer.concat([this.buffer, bytes])
+    while (remaining.length >= 5) {
       const msgLength = bytesToInt32(remaining.slice(1, 5))
+      if (remaining.length < 1 + msgLength) break
+
       const msgBytes = remaining.slice(0, 1 + msgLength)
       const msg = Backend.deserialise(msgBytes)
       remaining = remaining.slice(1 + msgLength)
@@ -70,5 +74,6 @@ export class Channel {
         this.outBuffer.push(msg)
       }
     }
+    this.buffer = remaining
   }
 }
