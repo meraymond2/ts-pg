@@ -29,7 +29,3 @@ https://www.postgresql.org/docs/current/protocol-flow.html
 https://www.postgresql.org/docs/current/protocol-message-formats.html
 
 https://hub.docker.com/_/postgres/
-
-create table cats ( name text, age int ) ;
-insert into cats (name, age) values ('Cascat', 5);
-insert into cats (name, age) values ('Luna', 4);

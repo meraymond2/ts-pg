@@ -98,7 +98,7 @@ const oidToParser: Record<number, (string) => TSType> = {
   1040: parseUnknown(1040), // _macaddr
   1041: parseUnknown(1041), // _inet
   1042: parseUnknown(1042), // bpchar
-  1043: parseUnknown(1043), // varchar
+  1043: keepAsString, // varchar
   1082: parseUnknown(1082), // date
   1083: parseUnknown(1083), // time
   1114: parseUnknown(1114), // timestamp

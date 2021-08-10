@@ -13,35 +13,56 @@ type Config = {
   password: string | undefined
 }
 
+type Row = Record<string, TSType>
+
 export class Connection {
   private channel: Channel
   private state: States.State
 
   constructor(user: string, database: string | undefined) {
-    this.channel = new Channel()
+    this.channel = new Channel(true)
     this.state = { _tag: "Uninitialised", user, database }
   }
 
   // TODO: don't write query if there are other queries already in flight
   // TODO: error if trying to query when channel is closed
-  query = async (sql: string): Promise<Array<Record<string, TSType>>> => {
+  query = async (sql: string): Promise<Row[]> => {
     this.channel.write({
       _tag: "Query",
       query: sql,
     })
     const msgs = await this.readUntil(["ReadyForQuery"])
-    const rowDesc = msgs[0]
-    if (rowDesc._tag !== "RowDescription") throw Error("Unreachable")
-    const { fields } = rowDesc
-
-    const rows = msgs.filter(Backend.isDataRow)
-    return rows.reduce((rowAcc, row) => rowAcc.concat(
-      row.values.reduce((fieldAcc, value, idx) => ({
-        ...fieldAcc,
-        [fields[idx].fieldName]: parseVal(value, fields[idx].dataTypeOid)
-      }), {})
-    ), [])
+    const first = msgs[0]
+    switch (first._tag) {
+      case "ErrorResponse":
+        throw Error(first.fields.message)
+      case "Close":
+        return [{ completed: first.name }]
+      case "RowDescription": {
+        const { fields } = first
+        const rows = msgs.filter(Backend.isDataRow)
+        return rows.reduce(
+          (rowAcc, row) =>
+            rowAcc.concat(
+              row.values.reduce(
+                (fieldAcc, value, idx) => ({
+                  ...fieldAcc,
+                  [fields[idx].fieldName]: parseVal(value, fields[idx].dataTypeOid),
+                }),
+                {}
+              )
+            ),
+          []
+        )
+      }
+    }
   }
+
+  describe = async (tableName: string): Promise<Row[]> =>
+    this.query(`
+    SELECT column_name AS field, data_type AS type, column_default AS default, is_nullable AS nullable
+    FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '${tableName}';
+    `)
 
   close = (): void => {
     this.channel.close()

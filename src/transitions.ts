@@ -22,7 +22,7 @@ export const fromUnitialised = (
     case "AuthenticationOk":
       return buildReadyForQuery(msgs)
     default:
-      throw Error("Unreachable")
+      throw Error("Unreachable (2)")
   }
 }
 
