@@ -1,3 +1,5 @@
+import * as fs from "fs"
+import * as Backend from "./backend-messages"
 import { Connection as Conn } from "./connection"
 
 const conn = Conn.init({
@@ -9,5 +11,10 @@ const conn = Conn.init({
 })
 
 conn.then((conn) => {
-  conn.query("SELECT * FROM pg_type").then(console.log)
+  conn
+    .query("SELECT * FROM cats")
+    .then(console.log)
+    .then(() => {
+      conn.close()
+    })
 })

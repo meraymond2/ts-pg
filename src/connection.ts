@@ -3,6 +3,7 @@ import * as Backend from "./backend-messages"
 import { fromPasswordRequested, fromUnitialised } from "./transitions"
 import { hashMd5 } from "./utils"
 import { Channel } from "./channel"
+import { TSType, parseVal } from "./pg_types"
 
 type Config = {
   host: string
@@ -22,13 +23,24 @@ export class Connection {
   }
 
   // TODO: don't write query if there are other queries already in flight
-  query = async (sql: string): Promise<any> => {
+  // TODO: error if trying to query when channel is closed
+  query = async (sql: string): Promise<Array<Record<string, TSType>>> => {
     this.channel.write({
       _tag: "Query",
       query: sql,
     })
     const msgs = await this.readUntil(["ReadyForQuery"])
-    return msgs
+    const rowDesc = msgs[0]
+    if (rowDesc._tag !== "RowDescription") throw Error("Unreachable")
+    const { fields } = rowDesc
+
+    const rows = msgs.filter(Backend.isDataRow)
+    return rows.reduce((rowAcc, row) => rowAcc.concat(
+      row.values.reduce((fieldAcc, value, idx) => ({
+        ...fieldAcc,
+        [fields[idx].fieldName]: parseVal(value, fields[idx].dataTypeOid)
+      }), {})
+    ), [])
   }
 
   close = (): void => {

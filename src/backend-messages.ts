@@ -78,6 +78,8 @@ export type DataRow = {
   values: Array<string | null>
 }
 
+export const isDataRow = (msg: Msg): msg is DataRow => msg._tag === "DataRow"
+
 export type Close = {
   _tag: "Close"
   type: "statement" | "portal"
@@ -142,7 +144,9 @@ const deserialiseAuthenticationMD5Password = (bytes: Uint8Array): Authentication
  * Int32 Length
  * Int32 3
  */
-const deserialiseAuthenticationCleartextPassword = (bytes: Uint8Array): AuthenticationCleartextPassword => ({
+const deserialiseAuthenticationCleartextPassword = (
+  bytes: Uint8Array
+): AuthenticationCleartextPassword => ({
   _tag: "AuthenticationCleartextPassword",
 })
 
