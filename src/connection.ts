@@ -32,30 +32,39 @@ export class Connection {
       query: sql,
     })
     const msgs = await this.readUntil(["ReadyForQuery"])
-    const first = msgs[0]
-    switch (first._tag) {
-      case "ErrorResponse":
-        throw Error(first.fields.message)
-      case "Close":
-        return [{ completed: first.name }]
-      case "RowDescription": {
-        const { fields } = first
-        const rows = msgs.filter(Backend.isDataRow)
-        return rows.reduce(
-          (rowAcc, row) =>
-            rowAcc.concat(
-              row.values.reduce(
+    let rows: Row[] = []
+    let idx = 0
+    while (idx < msgs.length) {
+      const msg = msgs[idx]
+      switch (msg._tag) {
+        case "ErrorResponse":
+          throw Error(msg.fields.message)
+        case "Close":
+          rows.push({ completed: msg.name })
+          break
+        case "EmptyQueryResponse":
+          break
+        case "RowDescription": {
+          const { fields } = msg
+          idx = idx + 1
+          while (msgs[idx]._tag === "DataRow") {
+            const msg = msgs[idx] as Backend.DataRow // sigh, TypeScript
+            rows.push(
+              msg.values.reduce(
                 (fieldAcc, value, idx) => ({
                   ...fieldAcc,
                   [fields[idx].fieldName]: parseVal(value, fields[idx].dataTypeOid),
                 }),
                 {}
               )
-            ),
-          []
-        )
+            )
+            idx = idx + 1
+          }
+        }
       }
+      idx = idx + 1
     }
+    return rows
   }
 
   describe = async (tableName: string): Promise<Row[]> =>

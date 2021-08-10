@@ -39,7 +39,7 @@ const conn = Conn.init({
 
 conn.then((conn) => {
   conn
-    .query("SELECT * FROM cats")
+    .query("SELECT * FROM cats;")
     .then(console.log)
     .then(() => {
       conn.close()

@@ -10,6 +10,7 @@ export type Msg =
   | RowDescription
   | DataRow
   | Close
+  | EmptyQueryResponse
   | ErrorResponse
 
 export type MsgType =
@@ -78,6 +79,10 @@ export type DataRow = {
   values: Array<string | null>
 }
 
+export type EmptyQueryResponse = {
+  _tag: "EmptyQueryResponse"
+}
+
 export const isDataRow = (msg: Msg): msg is DataRow => msg._tag === "DataRow"
 
 export type Close = {
@@ -102,6 +107,8 @@ export const deserialise = (bytes: Uint8Array): Msg => {
       return deserialiseDataRow(bytes)
     case "E":
       return deserialiseErrorResponse(bytes)
+    case "I":
+      return deserialiseEmptyQueryResponse(bytes)
     case "K":
       return deserialiseBackendKeyData(bytes)
     case "R":
@@ -293,6 +300,14 @@ const deserialiseClose = (bytes: Uint8Array): Close => {
     name,
   }
 }
+
+/**
+ * Int8 'C'
+ * Int32 Length
+ */
+const deserialiseEmptyQueryResponse = (_bytes: Uint8Array): EmptyQueryResponse => ({
+  _tag: "EmptyQueryResponse",
+})
 
 /**
  * Int8 'E'
