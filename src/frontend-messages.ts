@@ -1,4 +1,4 @@
-export type Msg = StartupMessage | PasswordMessage | Query
+export type Msg = StartupMessage | PasswordMessage | Query | Parse
 
 export type StartupMessage = {
   _tag: "StartupMessage"
@@ -18,6 +18,13 @@ export type Query = {
   query: string
 }
 
+export type Parse = {
+  _tag: "Parse"
+  name: string
+  query: string
+  types: number[] // oids
+}
+
 /******************************************************************************/
 
 export const serialise = (msg: Msg): Uint8Array => {
@@ -28,6 +35,8 @@ export const serialise = (msg: Msg): Uint8Array => {
       return serialiseStartupMessage(msg)
     case "Query":
       return serialiseQuery(msg)
+    case "Parse":
+      return serialiseParse(msg)
   }
 }
 
@@ -79,6 +88,33 @@ const serialiseQuery = (msg: Query): Uint8Array => {
   buf[0] = "Q".charCodeAt(0)
   spliceInt(buf, 1, len, 4)
   spliceStr(buf, 5, msg.query)
+  return buf
+}
+
+/**
+ * Int8 'P'
+ * Int32 Length
+ * CString Prepared Stmt Name
+ * CString Query String
+ * Int16 Number of Specified Types
+ *
+ * Int32 Type Oids
+ */
+const serialiseParse = (msg: Parse): Uint8Array => {
+  const nameLen = clen(msg.name)
+  const queryLen = clen(msg.query)
+  const len = 4 + nameLen + queryLen + 2 + 4 * msg.types.length
+  let buf = new Uint8Array(1 + len)
+  buf[0] = "P".charCodeAt(0)
+  spliceInt(buf, 1, len, 4)
+  spliceStr(buf, 5, msg.name)
+  spliceStr(buf, 5 + nameLen, msg.query)
+  spliceInt(buf, 5 + nameLen + queryLen, msg.types.length, 2)
+  let idx = 0
+  while (idx < msg.types.length) {
+    const pos = 5 + nameLen + queryLen + 2 + idx * 4
+    spliceInt(buf, pos, msg.types[idx], 4)
+  }
   return buf
 }
 

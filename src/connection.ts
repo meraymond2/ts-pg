@@ -67,6 +67,18 @@ export class Connection {
     return rows
   }
 
+  extendedQuery = async (sql: string): Promise<Row[]> => {
+    this.channel.write({
+      _tag: "Parse",
+      query: sql,
+      name: "",
+      types: [],
+    })
+    const msgs = await this.readUntil(["ReadyForQuery"])
+    console.log(msgs)
+    return []
+  }
+
   describe = async (tableName: string): Promise<Row[]> =>
     this.query(`
     SELECT column_name AS field, data_type AS type, column_default AS default, is_nullable AS nullable
