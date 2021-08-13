@@ -67,15 +67,35 @@ export class Connection {
     return rows
   }
 
-  extendedQuery = async (sql: string): Promise<Row[]> => {
+  extendedQuery = async (sql: string, params: TSType[]): Promise<Row[]> => {
     this.channel.write({
       _tag: "Parse",
       query: sql,
       name: "",
       types: [],
     })
+    this.channel.write({
+      _tag: "Bind",
+      params,
+      portal: "",
+      stmt: "",
+    })
+    this.channel.write({
+      _tag: "Execute",
+      portal: "",
+      maxRows: 0,
+    })
+    this.channel.write({
+      _tag: "Sync",
+    })
+    // let msgs = []
+    // while (true) {
+    //   const msg = await this.channel.read()
+    //   console.log(msg)
+    //   msgs.push(msg)
+    // }
+
     const msgs = await this.readUntil(["ReadyForQuery"])
-    console.log(msgs)
     return []
   }
 

@@ -13,14 +13,14 @@ const parseBool = (s: string): boolean => s === "true"
 const keepAsString = (s: string): string => s
 const parseUnknown =
   (oid: number) =>
-  (val: string | null): string => {
+  (val: string): string => {
     log.info(`Unhandled type ${oid}`)
     return val
   }
 
 // The oids for the built in types are stable enough, so they’re
 // hard-coded.
-const oidToParser: Record<number, (string) => TSType> = {
+const oidToParser: Record<number, (s: string) => TSType> = {
   16: parseBool, // bool
   17: keepAsString, // bytea
   18: keepAsString, // char

@@ -8,7 +8,6 @@ const conn = Conn.init({
   password: "cascat",
 })
 
-
 // conn.then((conn) => {
 //   conn
 //     .query("CREATE TABLE cats ( name text, age int );")
@@ -25,11 +24,10 @@ const conn = Conn.init({
 //     })
 // })
 
-
 conn.then((conn) => {
   conn
     // .query("SELECT * FROM cats;")
-    .extendedQuery("SELECT * FROM cats WHERE name = $1")
+    .extendedQuery("SELECT * FROM cats WHERE name = $1", ["Cascat"])
     .then(console.log)
     .then(() => {
       conn.close()
@@ -39,7 +37,6 @@ conn.then((conn) => {
       conn.close()
     })
 })
-
 
 // conn.then((conn) => {
 //   conn

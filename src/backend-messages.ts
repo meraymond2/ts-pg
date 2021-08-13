@@ -12,6 +12,7 @@ export type Msg =
   | Close
   | EmptyQueryResponse
   | ErrorResponse
+  | ParseComplete
 
 export type MsgType =
   | "AuthenticationMD5Password"
@@ -24,6 +25,7 @@ export type MsgType =
   | "DataRow"
   | "Close"
   | "ErrorResponse"
+  | "ParseComplete"
 
 export type AuthenticationMD5Password = {
   _tag: "AuthenticationMD5Password"
@@ -96,11 +98,17 @@ export type ErrorResponse = {
   fields: Record<string, string>
 }
 
+export type ParseComplete = {
+  _tag: "ParseComplete"
+}
+
 /******************************************************************************/
 
 export const deserialise = (bytes: Uint8Array): Msg => {
   const msgType = String.fromCharCode(bytes[0])
   switch (msgType) {
+    case "1":
+      return deserialiseParseComplete(bytes)
     case "C":
       return deserialiseClose(bytes)
     case "D":
@@ -282,6 +290,14 @@ const deserialiseDataRow = (bytes: Uint8Array): DataRow => {
     _tag: "DataRow",
     values,
   }
+}
+
+/**
+ * Int8 '1'
+ * Int32 Length
+ */
+const deserialiseParseComplete = (bytes: Uint8Array): ParseComplete => {
+  return { _tag: "ParseComplete" }
 }
 
 /**

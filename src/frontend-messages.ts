@@ -1,6 +1,6 @@
 import { TSType } from "./pg_types"
 
-export type Msg = StartupMessage | PasswordMessage | Query | Parse | Bind
+export type Msg = StartupMessage | PasswordMessage | Query | Parse | Bind | Close | Execute | Sync
 
 export type StartupMessage = {
   _tag: "StartupMessage"
@@ -34,10 +34,32 @@ export type Bind = {
   params: TSType[]
 }
 
+export type Close = {
+  _tag: "Close"
+  toClose: "portal" | "statement"
+  name: string
+}
+
+export type Execute = {
+  _tag: "Execute"
+  portal: string
+  maxRows: number
+}
+
+export type Sync = {
+  _tag: "Sync"
+}
+
 /******************************************************************************/
 
 export const serialise = (msg: Msg): Uint8Array => {
   switch (msg._tag) {
+    case "Bind":
+      return serialiseBind(msg)
+    case "Close":
+      return serialiseClose(msg)
+    case "Execute":
+      return serialiseExecute(msg)
     case "Query":
       return serialiseQuery(msg)
     case "Parse":
@@ -46,6 +68,8 @@ export const serialise = (msg: Msg): Uint8Array => {
       return serializePasswordMessage(msg)
     case "StartupMessage":
       return serialiseStartupMessage(msg)
+    case "Sync":
+      return serialiseSync(msg)
   }
 }
 
@@ -122,6 +146,7 @@ const serialiseParse = (msg: Parse): Uint8Array => {
   while (idx < msg.types.length) {
     const pos = 5 + nameLen + queryLen + 2 + idx * 4
     spliceInt(buf, pos, msg.types[idx], 4)
+    idx = idx + 1
   }
   return buf
 }
@@ -139,29 +164,36 @@ const serialiseParse = (msg: Parse): Uint8Array => {
  * Int16[] k Format Codes
  */
 const serialiseBind = (msg: Bind): Uint8Array => {
-  const destPortal = "" // unnamed portal
-  const stmt = "" // unnamed prepared stmt
+  const destPortal = msg.portal
+  const stmt = msg.stmt
   const paramLength = msg.params.reduce<number>((acc, param) => {
     const byteCountLen = 4
     // TODO: handle arrays
-    const bytes = param.toString().length
+    const bytes = param === null ? 0 : param.toString().length
     return acc + byteCountLen + bytes + 2
   }, 0)
   const len = 4 + clen(destPortal) + clen(stmt) + 2 + 2 + 2 + paramLength + 2 + 2
   let buf = new Uint8Array(1 + len)
+  let pos = 0
 
   const paramFormat = 0 // all params in text format
   const paramCount = msg.params.length
 
   buf[0] = "B".charCodeAt(0)
-  spliceInt(buf, 1, len, 4)
-  spliceStr(buf, 5, destPortal)
-  spliceStr(buf, 6, stmt)
-  spliceInt(buf, 7, 1, 2) // one format code
-  spliceInt(buf, 9, paramFormat, 2)
-  spliceInt(buf, 11, paramCount, 2)
+  pos = pos + 1
+  spliceInt(buf, pos, len, 4)
+  pos = pos + 4
+  spliceStr(buf, pos, destPortal)
+  pos = pos + clen(destPortal)
+  spliceStr(buf, pos, stmt)
+  pos = pos + clen(stmt)
+  spliceInt(buf, pos, 1, 2) // one format code
+  pos = pos + 2
+  spliceInt(buf, pos, paramFormat, 2)
+  pos = pos + 2
+  spliceInt(buf, pos, paramCount, 2)
+  pos = pos + 2
 
-  let pos = 13
   let idx = 0
   while (idx < paramCount) {
     const param = msg.params[idx]
@@ -176,12 +208,56 @@ const serialiseBind = (msg: Bind): Uint8Array => {
       spliceStr(buf, pos, paramStr, false)
       pos = pos + len
     }
+    idx = idx + 1
   }
 
   const resFormat = 0 // all results in text format
   spliceInt(buf, pos, 1, 2) // one format code
-  spliceInt(buf, pos + 2, resFormat, 2)
+  pos = pos + 2
+  spliceInt(buf, pos, resFormat, 2)
+  return buf
+}
 
+/**
+ * Int8 'C'
+ * Int32 Length
+ * Int8 'S' or 'P'
+ * CString Name
+ */
+const serialiseClose = (msg: Close): Uint8Array => {
+  const len = 4 + 1 + clen(msg.name)
+  let buf = new Uint8Array(1 + len)
+  buf[0] = "C".charCodeAt(0)
+  spliceInt(buf, 1, len, 4)
+  spliceInt(buf, 5, msg.toClose === "statement" ? "S".charCodeAt(0) : "P".charCodeAt(0), 1)
+  spliceStr(buf, 6, msg.name)
+  return buf
+}
+
+/**
+ * Int8 'E'
+ * Int32 Length
+ * CString Portal
+ * Int32 Max Rows, 0 = No Limit
+ */
+const serialiseExecute = (msg: Execute): Uint8Array => {
+  const len = 4 + clen(msg.portal) + 4
+  let buf = new Uint8Array(1 + len)
+  buf[0] = "E".charCodeAt(0)
+  spliceInt(buf, 1, len, 4)
+  spliceStr(buf, 5, msg.portal)
+  spliceInt(buf, 5 + clen(msg.portal), msg.maxRows, 4)
+  return buf
+}
+
+/**
+ * Int8 'S'
+ * Int32 Length
+ */
+const serialiseSync = (msg: Sync): Uint8Array => {
+  let buf = new Uint8Array(5)
+  buf[0] = "S".charCodeAt(0)
+  spliceInt(buf, 1, 4, 4)
   return buf
 }
 
