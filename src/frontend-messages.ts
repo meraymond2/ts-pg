@@ -1,4 +1,6 @@
-export type Msg = StartupMessage | PasswordMessage | Query | Parse
+import { TSType } from "./pg_types"
+
+export type Msg = StartupMessage | PasswordMessage | Query | Parse | Bind
 
 export type StartupMessage = {
   _tag: "StartupMessage"
@@ -25,18 +27,25 @@ export type Parse = {
   types: number[] // oids
 }
 
+export type Bind = {
+  _tag: "Bind"
+  portal: string
+  stmt: string
+  params: TSType[]
+}
+
 /******************************************************************************/
 
 export const serialise = (msg: Msg): Uint8Array => {
   switch (msg._tag) {
-    case "PasswordMessage":
-      return serializePasswordMessage(msg)
-    case "StartupMessage":
-      return serialiseStartupMessage(msg)
     case "Query":
       return serialiseQuery(msg)
     case "Parse":
       return serialiseParse(msg)
+    case "PasswordMessage":
+      return serializePasswordMessage(msg)
+    case "StartupMessage":
+      return serialiseStartupMessage(msg)
   }
 }
 
@@ -44,7 +53,7 @@ export const serialise = (msg: Msg): Uint8Array => {
  * Int32 Length
  * Int16 Major Protocol Version
  * Int16 Minor Protocol Version
- * CStrings: user <user> password <password>
+ * CString[]: user <user> password <password>
  * Null Final Byte
  */
 const serialiseStartupMessage = (msg: StartupMessage): Uint8Array => {
@@ -97,8 +106,7 @@ const serialiseQuery = (msg: Query): Uint8Array => {
  * CString Prepared Stmt Name
  * CString Query String
  * Int16 Number of Specified Types
- *
- * Int32 Type Oids
+ * Int32[] Type Oids
  */
 const serialiseParse = (msg: Parse): Uint8Array => {
   const nameLen = clen(msg.name)
@@ -118,6 +126,65 @@ const serialiseParse = (msg: Parse): Uint8Array => {
   return buf
 }
 
+/**
+ * Int8 'B'
+ * Int32 Length
+ * CString Destination Portal
+ * CString Prepared Statement
+ * Int16 Number of Param Format Codes (n)
+ * Int16[] n Format Codes
+ * Int16 Number of Param Values
+ * [Int32 Bytes][] Length of Param Value, Param Value
+ * Int16 Number of Result Format Codes (k)
+ * Int16[] k Format Codes
+ */
+const serialiseBind = (msg: Bind): Uint8Array => {
+  const destPortal = "" // unnamed portal
+  const stmt = "" // unnamed prepared stmt
+  const paramLength = msg.params.reduce<number>((acc, param) => {
+    const byteCountLen = 4
+    // TODO: handle arrays
+    const bytes = param.toString().length
+    return acc + byteCountLen + bytes + 2
+  }, 0)
+  const len = 4 + clen(destPortal) + clen(stmt) + 2 + 2 + 2 + paramLength + 2 + 2
+  let buf = new Uint8Array(1 + len)
+
+  const paramFormat = 0 // all params in text format
+  const paramCount = msg.params.length
+
+  buf[0] = "B".charCodeAt(0)
+  spliceInt(buf, 1, len, 4)
+  spliceStr(buf, 5, destPortal)
+  spliceStr(buf, 6, stmt)
+  spliceInt(buf, 7, 1, 2) // one format code
+  spliceInt(buf, 9, paramFormat, 2)
+  spliceInt(buf, 11, paramCount, 2)
+
+  let pos = 13
+  let idx = 0
+  while (idx < paramCount) {
+    const param = msg.params[idx]
+    if (param === null) {
+      spliceInt(buf, pos, -1, 4)
+      pos = pos + 4
+    } else {
+      const paramStr = param.toString()
+      const len = paramStr.length
+      spliceInt(buf, pos, len, 4)
+      pos = pos + 4
+      spliceStr(buf, pos, paramStr, false)
+      pos = pos + len
+    }
+  }
+
+  const resFormat = 0 // all results in text format
+  spliceInt(buf, pos, 1, 2) // one format code
+  spliceInt(buf, pos + 2, resFormat, 2)
+
+  return buf
+}
+
 /******************************************************************************/
 
 const clen = (s: string): number => s.length + 1
@@ -131,9 +198,14 @@ const spliceInt = (buf: Uint8Array, idx: number, n: number, bytes: number = 4): 
   }
 }
 
-const spliceStr = (buf: Uint8Array, idx: number, s: string): void => {
+const spliceStr = (
+  buf: Uint8Array,
+  idx: number,
+  s: string,
+  nullTerminated: boolean = true
+): void => {
   Array.from(s).forEach((char, charIdx) => {
     buf[idx + charIdx] = char.charCodeAt(0)
-    buf[idx + s.length] = 0x00
+    if (nullTerminated) buf[idx + s.length] = 0x00
   })
 }
