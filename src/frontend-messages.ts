@@ -1,6 +1,6 @@
 import { TSType } from "./pg_types"
 
-export type Msg = StartupMessage | PasswordMessage | Query | Parse | Bind | Close | Execute | Sync
+export type Msg = StartupMessage | PasswordMessage | Query | Parse | Bind | Execute | Sync
 
 export type StartupMessage = {
   _tag: "StartupMessage"
@@ -27,17 +27,15 @@ export type Parse = {
   types: number[] // oids
 }
 
+type FormatCode = "text" | "binary"
+
 export type Bind = {
   _tag: "Bind"
   portal: string
   stmt: string
   params: TSType[]
-}
-
-export type Close = {
-  _tag: "Close"
-  toClose: "portal" | "statement"
-  name: string
+  paramFormats: FormatCode[]
+  resultFormats: FormatCode[]
 }
 
 export type Execute = {
@@ -56,8 +54,6 @@ export const serialise = (msg: Msg): Uint8Array => {
   switch (msg._tag) {
     case "Bind":
       return serialiseBind(msg)
-    case "Close":
-      return serialiseClose(msg)
     case "Execute":
       return serialiseExecute(msg)
     case "Query":
@@ -70,59 +66,51 @@ export const serialise = (msg: Msg): Uint8Array => {
       return serialiseStartupMessage(msg)
     case "Sync":
       return serialiseSync(msg)
+    default:
+      throw Error("Unreachable (4)")
   }
 }
+
+/*
+For all Frontend messages, the length does not include the initial 'type' byte,
+but does include the 4 bytes of the length attribute.
+*/
 
 /**
  * Int32 Length
  * Int16 Major Protocol Version
  * Int16 Minor Protocol Version
- * CString[]: user <user> password <password>
+ * CString[]: Parameter Keys and Values
  * Null Final Byte
+ *
+ * For simple use cases, only the user and database parameters are relevant, so
+ * I’m skipping the replication mode parameter.
  */
-const serialiseStartupMessage = (msg: StartupMessage): Uint8Array => {
-  const params = ["user", msg.user, "database", msg.database]
-  const len = 4 + 2 + 2 + params.reduce((acc, param) => acc + clen(param), 0) + 1
-  let buf = new Uint8Array(len)
-  spliceInt(buf, 0, len, 4)
-  spliceInt(buf, 4, msg.majorVersion, 2)
-  spliceInt(buf, 6, msg.minorVersion, 2)
-  let i = 8
-  params.forEach((param) => {
-    spliceStr(buf, i, param)
-    i = i + clen(param)
-  })
-  buf[i] = 0x00
-  return buf
-}
+const serialiseStartupMessage = (msg: StartupMessage): Uint8Array =>
+  buildMsg(null, [
+    Int16(msg.majorVersion),
+    Int16(msg.minorVersion),
+    CStr("user"),
+    CStr(msg.user),
+    CStr("database"),
+    CStr(msg.database),
+    Int8(0x00),
+  ])
 
 /**
  * Int8 'p'
  * Int32 Length
  * CString hashed password
  */
-const serializePasswordMessage = (msg: PasswordMessage): Uint8Array => {
-  const len = 4 + clen(msg.password)
-  let buf = new Uint8Array(1 + len)
-  buf[0] = "p".charCodeAt(0)
-  spliceInt(buf, 1, len, 4)
-  spliceStr(buf, 5, msg.password)
-  return buf
-}
+const serializePasswordMessage = (msg: PasswordMessage): Uint8Array =>
+  buildMsg("p", [CStr(msg.password)])
 
 /**
  * Int8 'Q'
  * Int32 Length
  * CString Simple Query
  */
-const serialiseQuery = (msg: Query): Uint8Array => {
-  const len = 4 + clen(msg.query)
-  let buf = new Uint8Array(1 + len)
-  buf[0] = "Q".charCodeAt(0)
-  spliceInt(buf, 1, len, 4)
-  spliceStr(buf, 5, msg.query)
-  return buf
-}
+const serialiseQuery = (msg: Query): Uint8Array => buildMsg("Q", [CStr(msg.query)])
 
 /**
  * Int8 'P'
@@ -132,24 +120,8 @@ const serialiseQuery = (msg: Query): Uint8Array => {
  * Int16 Number of Specified Types
  * Int32[] Type Oids
  */
-const serialiseParse = (msg: Parse): Uint8Array => {
-  const nameLen = clen(msg.name)
-  const queryLen = clen(msg.query)
-  const len = 4 + nameLen + queryLen + 2 + 4 * msg.types.length
-  let buf = new Uint8Array(1 + len)
-  buf[0] = "P".charCodeAt(0)
-  spliceInt(buf, 1, len, 4)
-  spliceStr(buf, 5, msg.name)
-  spliceStr(buf, 5 + nameLen, msg.query)
-  spliceInt(buf, 5 + nameLen + queryLen, msg.types.length, 2)
-  let idx = 0
-  while (idx < msg.types.length) {
-    const pos = 5 + nameLen + queryLen + 2 + idx * 4
-    spliceInt(buf, pos, msg.types[idx], 4)
-    idx = idx + 1
-  }
-  return buf
-}
+const serialiseParse = (msg: Parse): Uint8Array =>
+  buildMsg("P", [CStr(msg.name), CStr(msg.query), Int16(msg.types.length), ...msg.types.map(Int32)])
 
 /**
  * Int8 'B'
@@ -163,76 +135,21 @@ const serialiseParse = (msg: Parse): Uint8Array => {
  * Int16 Number of Result Format Codes (k)
  * Int16[] k Format Codes
  */
-const serialiseBind = (msg: Bind): Uint8Array => {
-  const destPortal = msg.portal
-  const stmt = msg.stmt
-  const paramLength = msg.params.reduce<number>((acc, param) => {
-    const byteCountLen = 4
-    // TODO: handle arrays
-    const bytes = param === null ? 0 : param.toString().length
-    return acc + byteCountLen + bytes + 2
-  }, 0)
-  const len = 4 + clen(destPortal) + clen(stmt) + 2 + 2 + 2 + paramLength + 2 + 2
-  let buf = new Uint8Array(1 + len)
-  let pos = 0
-
-  const paramFormat = 0 // all params in text format
-  const paramCount = msg.params.length
-
-  buf[0] = "B".charCodeAt(0)
-  pos = pos + 1
-  spliceInt(buf, pos, len, 4)
-  pos = pos + 4
-  spliceStr(buf, pos, destPortal)
-  pos = pos + clen(destPortal)
-  spliceStr(buf, pos, stmt)
-  pos = pos + clen(stmt)
-  spliceInt(buf, pos, 1, 2) // one format code
-  pos = pos + 2
-  spliceInt(buf, pos, paramFormat, 2)
-  pos = pos + 2
-  spliceInt(buf, pos, paramCount, 2)
-  pos = pos + 2
-
-  let idx = 0
-  while (idx < paramCount) {
-    const param = msg.params[idx]
-    if (param === null) {
-      spliceInt(buf, pos, -1, 4)
-      pos = pos + 4
-    } else {
-      const paramStr = param.toString()
-      const len = paramStr.length
-      spliceInt(buf, pos, len, 4)
-      pos = pos + 4
-      spliceStr(buf, pos, paramStr, false)
-      pos = pos + len
-    }
-    idx = idx + 1
-  }
-
-  const resFormat = 0 // all results in text format
-  spliceInt(buf, pos, 1, 2) // one format code
-  pos = pos + 2
-  spliceInt(buf, pos, resFormat, 2)
-  return buf
-}
-
-/**
- * Int8 'C'
- * Int32 Length
- * Int8 'S' or 'P'
- * CString Name
- */
-const serialiseClose = (msg: Close): Uint8Array => {
-  const len = 4 + 1 + clen(msg.name)
-  let buf = new Uint8Array(1 + len)
-  buf[0] = "C".charCodeAt(0)
-  spliceInt(buf, 1, len, 4)
-  spliceInt(buf, 5, msg.toClose === "statement" ? "S".charCodeAt(0) : "P".charCodeAt(0), 1)
-  spliceStr(buf, 6, msg.name)
-  return buf
-}
+const serialiseBind = (msg: Bind): Uint8Array =>
+  buildMsg("B", [
+    CStr(msg.portal),
+    CStr(msg.stmt),
+    Int16(msg.paramFormats.length),
+    ...msg.paramFormats.map((code) => (code === "text" ? Int16(0) : Int16(1))),
+    Int16(msg.params.length),
+    ...msg.params.flatMap((param) =>
+      param === null
+        ? [Int32(-1), Str("")]
+        : [Int32(param.toString().length), Str(param.toString())]
+    ),
+    Int16(msg.resultFormats.length),
+    ...msg.resultFormats.map((code) => (code === "text" ? Int16(0) : Int16(1))),
+  ])
 
 /**
  * Int8 'E'
@@ -240,48 +157,65 @@ const serialiseClose = (msg: Close): Uint8Array => {
  * CString Portal
  * Int32 Max Rows, 0 = No Limit
  */
-const serialiseExecute = (msg: Execute): Uint8Array => {
-  const len = 4 + clen(msg.portal) + 4
-  let buf = new Uint8Array(1 + len)
-  buf[0] = "E".charCodeAt(0)
-  spliceInt(buf, 1, len, 4)
-  spliceStr(buf, 5, msg.portal)
-  spliceInt(buf, 5 + clen(msg.portal), msg.maxRows, 4)
-  return buf
-}
+const serialiseExecute = (msg: Execute): Uint8Array =>
+  buildMsg("E", [CStr(msg.portal), Int32(msg.maxRows)])
 
 /**
  * Int8 'S'
  * Int32 Length
  */
-const serialiseSync = (msg: Sync): Uint8Array => {
-  let buf = new Uint8Array(5)
-  buf[0] = "S".charCodeAt(0)
-  spliceInt(buf, 1, 4, 4)
-  return buf
-}
+const serialiseSync = (msg: Sync): Uint8Array => buildMsg("S", [])
 
 /******************************************************************************/
 
-const clen = (s: string): number => s.length + 1
+type Int32 = [number, 4]
+const Int32 = (n: number): Field => [n, 4]
 
-const spliceInt = (buf: Uint8Array, idx: number, n: number, bytes: number = 4): void => {
-  let i = 0
-  while (i < bytes) {
-    const shiftBy = (bytes - (i + 1)) * 8
-    buf[idx + i] = (n >> shiftBy) % 0xff // take last byte
-    i++
+type Int16 = [number, 2]
+const Int16 = (n: number): Field => [n, 2]
+
+type Int8 = [number, 1]
+const Int8 = (n: number): Field => [n, 1]
+
+type CStr = [string, true]
+const CStr = (s: string): Field => [s, true]
+
+type Str = [string, false]
+const Str = (s: string): Field => [s, false]
+
+type Field = Int32 | Int16 | Int8 | CStr | Str
+
+const buildMsg = (msgType: string | null, fields: Field[]): Uint8Array => {
+  const content = fields.reduce<number[]>((acc, field) => acc.concat(fieldBytes(field)), [])
+  const msgLength = 4 + content.length
+  const lenBytes = intBytes(msgLength, 4)
+  const header = msgType ? [msgType.charCodeAt(0), ...lenBytes] : lenBytes
+  return new Uint8Array(header.concat(content))
+}
+
+const fieldBytes = (field: Field): number[] => {
+  if (typeof field[0] === "number" && typeof field[1] === "number") {
+    return intBytes(field[0], field[1])
+  } else if (typeof field[0] === "string" && typeof field[1] === "boolean") {
+    return strBytes(field[0], field[1])
+  } else {
+    throw Error("Unreachable (3)")
   }
 }
 
-const spliceStr = (
-  buf: Uint8Array,
-  idx: number,
-  s: string,
-  nullTerminated: boolean = true
-): void => {
-  Array.from(s).forEach((char, charIdx) => {
-    buf[idx + charIdx] = char.charCodeAt(0)
-    if (nullTerminated) buf[idx + s.length] = 0x00
-  })
+const intBytes = (n: number, bytes: number): number[] => {
+  let i = 0
+  let buf = new Array(bytes)
+  while (i < bytes) {
+    const shiftBy = (bytes - (i + 1)) * 8
+    buf[i] = (n >> shiftBy) % 0xff // take last byte
+    i++
+  }
+  return buf
+}
+
+const strBytes = (s: string, nullTerminated: boolean = true): number[] => {
+  const buf = Array.from(s).map((char) => char.charCodeAt(0))
+  if (nullTerminated) buf.push(0x00)
+  return buf
 }

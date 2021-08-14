@@ -79,6 +79,8 @@ export class Connection {
       params,
       portal: "",
       stmt: "",
+      paramFormats: ["text"], // just one, to specify all params are text
+      resultFormats: ["text"], // just one, to specify all results are text
     })
     this.channel.write({
       _tag: "Execute",

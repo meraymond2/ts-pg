@@ -8,52 +8,34 @@ const conn = Conn.init({
   password: "cascat",
 })
 
-// conn.then((conn) => {
-//   conn
-//     .query("CREATE TABLE cats ( name text, age int );")
-//     // .query("DROP TABLE cats;")
-//     .then(console.log)
-//     .then(() => conn.query("INSERT INTO cats (name, age) values ('Cascat', 8);"))
-//     .then(console.log)
-//     .then(() => conn.query("INSERT INTO cats (name, age) values ('Luna', 7);"))
-//     .then(console.log)
-//     .then(() => conn.close())
-//     .catch((err) => {
-//       console.error(err)
-//       conn.close()
-//     })
-// })
+const createDb = async (conn: Conn) => {
+  const createRes = await conn.query("CREATE TABLE cats ( name text, age int );")
+  console.log(createRes)
 
-conn.then((conn) => {
-  conn
-    // .query("SELECT * FROM cats;")
-    .extendedQuery("SELECT * FROM cats WHERE name = $1", ["Cascat"])
-    .then(console.log)
-    .then(() => {
-      conn.close()
-    })
-    .catch((err) => {
-      console.error(err)
-      conn.close()
-    })
-})
+  const insertsRes = await conn.query(`
+    INSERT INTO cats (name, age) values ('Cascat', 8);
+    INSERT INTO cats (name, age) values ('Luna', 7);
+  `)
+  console.log(insertsRes)
+}
+
+const simplyQuery = async (conn: Conn) => {
+  const res = await conn.query("SELECT * FROM cats")
+  console.log(res)
+}
+
+const extendedQuery = async (conn: Conn) => {
+  const res = await conn.extendedQuery("SELECT * FROM cats WHERE name = $1", ["Cascat"])
+  console.log(res)
+}
+
+// conn.then(createDb).catch(console.error)
+// conn.then(simplyQuery).catch(console.error)
+conn.then(extendedQuery).catch(console.error)
 
 // conn.then((conn) => {
 //   conn
 //     .describe("cats")
-//     .then(console.log)
-//     .then(() => {
-//       conn.close()
-//     })
-//     .catch((err) => {
-//       console.error(err)
-//       conn.close()
-//     })
-// })
-
-// conn.then((conn) => {
-//   conn
-//     .query("SELECT * FROM cats;")
 //     .then(console.log)
 //     .then(() => {
 //       conn.close()

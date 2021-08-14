@@ -1,7 +1,7 @@
 {
   "scripts": {
     "build": "npx esbuild src/index.ts --bundle --platform=node --outfile=out.js",
-    "check": "tsc src/* --noEmit --strict",
+    "check": "tsc src/* --noEmit --strict --target es2019 --moduleResolution node",
     "lint": "npx prettier -w src",
     "start": "npm run build && node out.js"
   },
