@@ -1,36 +1,40 @@
 import { log } from "./utils"
+import { TSType } from "./text_pg_types"
 
-export type TSType = string | number | boolean | null | TSType[]
-
-// For some types, it might be worth attempting to parse based on the typname,
-// like Postgis `geometry`.
-export const parseVal = (val: string | null, oid: number): TSType => {
+export const parseBinVal = (val: Uint8Array | null, oid: number): TSType => {
   const parser = oidToParser[oid] || parseUnknown(oid)
   return val ? parser(val) : val
 }
 
-const parseBool = (s: string): boolean => s === "true"
-const keepAsString = (s: string): string => s
+const parseBool = (bytes: Uint8Array): boolean => bytes[0] === 0x01
+const keepAsBytes = (bytes: Uint8Array) => bytes
+const parseString = (bytes: Uint8Array): string => {
+  const decoder = new TextDecoder("utf-8")
+  return decoder.decode(new Uint8Array(bytes))
+}
+const parseInt = (bytes: Uint8Array): number =>
+  bytes.reduce((acc, byte, idx) => acc | (byte << ((bytes.length - 1 - idx) * 8)), 0)
+
 const parseUnknown =
   (oid: number) =>
-  (val: string): string => {
+  (bytes: Uint8Array): string => {
     log.info(`Unhandled type ${oid}`)
-    return val
+    return parseString(bytes)
   }
 
 // The oids for the built in types are stable enough, so they’re
 // hard-coded.
-const oidToParser: Record<number, (s: string) => TSType> = {
+const oidToParser: Record<number, (bytes: Uint8Array) => TSType> = {
   16: parseBool, // bool
-  17: keepAsString, // bytea
-  18: keepAsString, // char
-  19: keepAsString, // name
+  17: keepAsBytes, // bytea
+  18: parseString, // char
+  19: parseString, // name
   20: parseInt, // int8
   21: parseInt, // int2
   22: parseUnknown(22), // int2vector
   23: parseInt, // int4
-  24: keepAsString, // regproc (function name)
-  25: keepAsString, // text
+  24: parseString, // regproc (function name)
+  25: parseString, // text
   26: parseInt, // oid
   27: parseInt, // tid
   28: parseInt, // xid
@@ -98,7 +102,7 @@ const oidToParser: Record<number, (s: string) => TSType> = {
   1040: parseUnknown(1040), // _macaddr
   1041: parseUnknown(1041), // _inet
   1042: parseUnknown(1042), // bpchar
-  1043: keepAsString, // varchar
+  1043: parseString, // varchar
   1082: parseUnknown(1082), // date
   1083: parseUnknown(1083), // time
   1114: parseUnknown(1114), // timestamp

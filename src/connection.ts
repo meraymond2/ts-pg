@@ -3,7 +3,8 @@ import * as Backend from "./backend-messages"
 import { fromPasswordRequested, fromUnitialised } from "./transitions"
 import { hashMd5 } from "./utils"
 import { Channel } from "./channel"
-import { TSType, parseVal } from "./pg_types"
+import { TSType, parseTextVal } from "./text_pg_types"
+import { parseBinVal } from "./bin_pg_types"
 
 type Config = {
   host: string
@@ -55,7 +56,7 @@ export class Connection {
               msg.values.reduce(
                 (fieldAcc, value, idx) => ({
                   ...fieldAcc,
-                  [fields[idx].fieldName]: parseVal(value, fields[idx].dataTypeOid),
+                  [fields[idx].fieldName]: parseTextVal(value, fields[idx].dataTypeOid),
                 }),
                 {}
               )
@@ -87,7 +88,7 @@ export class Connection {
       portal: "",
       stmt: "",
       paramFormats: ["text"], // just one, to specify all params are text
-      resultFormats: ["text"], // just one, to specify all results are text
+      resultFormats: ["binary"], // just one, to specify all results are binary
     })
     this.channel.write({
       _tag: "Execute",
@@ -114,7 +115,7 @@ export class Connection {
             msg.values.reduce(
               (fieldAcc, value, idx) => ({
                 ...fieldAcc,
-                [fields[idx].fieldName]: parseVal(value, fields[idx].dataTypeOid),
+                [fields[idx].fieldName]: parseBinVal(value, fields[idx].dataTypeOid),
               }),
               {}
             )

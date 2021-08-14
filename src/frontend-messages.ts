@@ -1,4 +1,4 @@
-import { TSType } from "./pg_types"
+import { TSType } from "./text_pg_types"
 
 export type Msg =
   | StartupMessage

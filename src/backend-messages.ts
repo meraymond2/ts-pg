@@ -87,14 +87,12 @@ export type ParameterDescription = {
 
 export type DataRow = {
   _tag: "DataRow"
-  values: Array<string | null>
+  values: Array<null | Uint8Array>
 }
 
 export type EmptyQueryResponse = {
   _tag: "EmptyQueryResponse"
 }
-
-export const isDataRow = (msg: Msg): msg is DataRow => msg._tag === "DataRow"
 
 export type Close = {
   _tag: "Close"
@@ -303,14 +301,14 @@ const deserialiseParameterDescription = (bytes: Uint8Array): ParameterDescriptio
 const deserialiseDataRow = (bytes: Uint8Array): DataRow => {
   const arr = Array.from(bytes.slice(5))
   const rowCount = consumeInt16(arr)
-  let values: Array<string | null> = []
+  let values: Array<null | Uint8Array> = []
   let i = 0
   while (i < rowCount) {
     const len = consumeInt32(arr)
     if (len === -1) {
       values.push(null)
     } else {
-      values.push(consumeStr(arr, len))
+      values.push(new Uint8Array(arr.splice(0, len)))
     }
     i = i + 1
   }
