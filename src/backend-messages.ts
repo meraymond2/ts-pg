@@ -8,11 +8,13 @@ export type Msg =
   | BackendKeyData
   | ReadyForQuery
   | RowDescription
+  | ParameterDescription
   | DataRow
   | Close
   | EmptyQueryResponse
   | ErrorResponse
   | ParseComplete
+  | BindComplete
 
 export type MsgType =
   | "AuthenticationMD5Password"
@@ -22,10 +24,12 @@ export type MsgType =
   | "BackendKeyData"
   | "ReadyForQuery"
   | "RowDescription"
+  | "ParameterDescription"
   | "DataRow"
   | "Close"
   | "ErrorResponse"
   | "ParseComplete"
+  | "BindComplete"
 
 export type AuthenticationMD5Password = {
   _tag: "AuthenticationMD5Password"
@@ -61,7 +65,7 @@ export type ReadyForQuery = {
 // I still haven’t answered my question as to how you identify the type. You can
 // look them up `SELECT * FROM pg_type WHERE oid = 25;` but I don’t know if they
 // are stable enough to be able to skip that. Presumably.
-type FieldDescription = {
+export type FieldDescription = {
   fieldName: string
   tableOid: number
   column: number
@@ -74,6 +78,11 @@ type FieldDescription = {
 export type RowDescription = {
   _tag: "RowDescription"
   fields: FieldDescription[]
+}
+
+export type ParameterDescription = {
+  _tag: "ParameterDescription"
+  oids: number[]
 }
 
 export type DataRow = {
@@ -102,6 +111,10 @@ export type ParseComplete = {
   _tag: "ParseComplete"
 }
 
+export type BindComplete = {
+  _tag: "BindComplete"
+}
+
 /******************************************************************************/
 
 export const deserialise = (bytes: Uint8Array): Msg => {
@@ -109,6 +122,8 @@ export const deserialise = (bytes: Uint8Array): Msg => {
   switch (msgType) {
     case "1":
       return deserialiseParseComplete(bytes)
+    case "2":
+      return deserialiseBindComplete(bytes)
     case "C":
       return deserialiseClose(bytes)
     case "D":
@@ -137,6 +152,8 @@ export const deserialise = (bytes: Uint8Array): Msg => {
       return deserialiseRowDescription(bytes)
     case "Z":
       return deserialiseReadyForQuery(bytes)
+    case "t":
+      return deserialiseParameterDescription(bytes)
     default:
       throw Error("Unimplemented message type " + msgType)
   }
@@ -260,6 +277,21 @@ const deserialiseRowDescription = (bytes: Uint8Array): RowDescription => {
   }
 }
 
+const deserialiseParameterDescription = (bytes: Uint8Array): ParameterDescription => {
+  const arr = Array.from(bytes.slice(5))
+  const paramCount = consumeInt16(arr)
+  let i = 0
+  let oids = []
+  while (i < paramCount) {
+    oids.push(consumeInt32(arr))
+    i = i + 1
+  }
+  return {
+    _tag: "ParameterDescription",
+    oids,
+  }
+}
+
 /**
  * Int8 'D'
  * Int32 Length
@@ -294,6 +326,14 @@ const deserialiseDataRow = (bytes: Uint8Array): DataRow => {
  */
 const deserialiseParseComplete = (bytes: Uint8Array): ParseComplete => {
   return { _tag: "ParseComplete" }
+}
+
+/**
+ * Int8 '2'
+ * Int32 Length
+ */
+const deserialiseBindComplete = (bytes: Uint8Array): BindComplete => {
+  return { _tag: "BindComplete" }
 }
 
 /**
@@ -334,7 +374,7 @@ const deserialiseErrorResponse = (bytes: Uint8Array): ErrorResponse => {
   let fields: Record<string, string> = {}
 
   while (arr.length > 1) {
-    const fieldId = String.fromCharCode(arr.shift())
+    const fieldId = String.fromCharCode(arr.shift() as number)
     const value = consumeCStr(arr)
     const key: string | undefined = errorFields[fieldId]
     if (key) fields[key] = value
@@ -349,6 +389,8 @@ const deserialiseErrorResponse = (bytes: Uint8Array): ErrorResponse => {
 /******************************************************************************/
 
 // Mutating helpers, to avoid having to keep track of positions everywhere.
+// I don’t like these, I’d prefer to use slices of the Uint8Array, but I also
+// don’t want to assign a new pos var after each slice. Hmmm.
 const consumeCStr = (byteArr: number[]): string => {
   let i = 0
   while (byteArr[i] !== 0x00) {
@@ -368,12 +410,12 @@ const consumeStr = (byteArr: number[], len: number): string => {
 
 const consumeInt32 = (byteArr: number[]): number => {
   const intBytes = byteArr.splice(0, 4)
-  return bytesToInt32(new Uint8Array(intBytes))
+  return bytesToInt32(intBytes)
 }
 
 const consumeInt16 = (byteArr: number[]): number => {
   const intBytes = byteArr.splice(0, 2)
-  return bytesToInt16(new Uint8Array(intBytes))
+  return bytesToInt16(intBytes)
 }
 
 // https://www.postgresql.org/docs/current/protocol-error-fields.html

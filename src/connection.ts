@@ -34,6 +34,8 @@ export class Connection {
     const msgs = await this.readUntil(["ReadyForQuery"])
     let rows: Row[] = []
     let idx = 0
+    // Simple queries can contain multiple SQL statments, so we need to handle
+    // multiple unrelated results.
     while (idx < msgs.length) {
       const msg = msgs[idx]
       switch (msg._tag) {
@@ -75,6 +77,11 @@ export class Connection {
       types: [],
     })
     this.channel.write({
+      _tag: "Describe",
+      describe: "statement",
+      name: "",
+    })
+    this.channel.write({
       _tag: "Bind",
       params,
       portal: "",
@@ -90,15 +97,34 @@ export class Connection {
     this.channel.write({
       _tag: "Sync",
     })
-    // let msgs = []
-    // while (true) {
-    //   const msg = await this.channel.read()
-    //   console.log(msg)
-    //   msgs.push(msg)
-    // }
 
     const msgs = await this.readUntil(["ReadyForQuery"])
-    return []
+    let fields: Backend.FieldDescription[] = []
+    let rows: Row[] = []
+    msgs.forEach((msg) => {
+      switch (msg._tag) {
+        case "ErrorResponse":
+          throw Error(msg.fields.message)
+        case "RowDescription": {
+          fields = msg.fields
+          break
+        }
+        case "DataRow":
+          rows.push(
+            msg.values.reduce(
+              (fieldAcc, value, idx) => ({
+                ...fieldAcc,
+                [fields[idx].fieldName]: parseVal(value, fields[idx].dataTypeOid),
+              }),
+              {}
+            )
+          )
+        default:
+          break
+      }
+    })
+
+    return rows
   }
 
   describe = async (tableName: string): Promise<Row[]> =>

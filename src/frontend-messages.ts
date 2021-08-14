@@ -1,6 +1,14 @@
 import { TSType } from "./pg_types"
 
-export type Msg = StartupMessage | PasswordMessage | Query | Parse | Bind | Execute | Sync
+export type Msg =
+  | StartupMessage
+  | PasswordMessage
+  | Query
+  | Parse
+  | Describe
+  | Bind
+  | Execute
+  | Sync
 
 export type StartupMessage = {
   _tag: "StartupMessage"
@@ -25,6 +33,12 @@ export type Parse = {
   name: string
   query: string
   types: number[] // oids
+}
+
+export type Describe = {
+  _tag: "Describe"
+  describe: "statement" | "portal"
+  name: string
 }
 
 type FormatCode = "text" | "binary"
@@ -54,6 +68,8 @@ export const serialise = (msg: Msg): Uint8Array => {
   switch (msg._tag) {
     case "Bind":
       return serialiseBind(msg)
+    case "Describe":
+      return serialiseDescribe(msg)
     case "Execute":
       return serialiseExecute(msg)
     case "Query":
@@ -150,6 +166,15 @@ const serialiseBind = (msg: Bind): Uint8Array =>
     Int16(msg.resultFormats.length),
     ...msg.resultFormats.map((code) => (code === "text" ? Int16(0) : Int16(1))),
   ])
+
+/**
+ * Int8 'E'
+ * Int32 Length
+ * Int8 'S' or 'P': Stmt or Portal
+ * CString Name
+ */
+const serialiseDescribe = (msg: Describe): Uint8Array =>
+  buildMsg("D", [Int8((msg.describe === "statement" ? "S" : "P").charCodeAt(0)), CStr(msg.name)])
 
 /**
  * Int8 'E'

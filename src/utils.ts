@@ -24,7 +24,7 @@ export const hashMd5 = (user: string, password: string, salt: Uint8Array): strin
  * https://stackoverflow.com/questions/54030623/left-shift-results-in-negative-numbers-in-javascript
  * The Postgres protocol doesn’t use unsigned ints though, so it’s irrelevant, but interesting.
  */
-export const bytesToInt32 = (bytes: Uint8Array): number =>
+export const bytesToInt32 = (bytes: Uint8Array | number[]): number =>
   (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]
 
-export const bytesToInt16 = (bytes: Uint8Array): number => (bytes[0] << 8) | bytes[1]
+export const bytesToInt16 = (bytes: Uint8Array | number[]): number => (bytes[0] << 8) | bytes[1]
