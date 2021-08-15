@@ -18,15 +18,15 @@ const main = async () => {
     database: "dbname",
     user: "michael",
     password: "cascat",
-  });
+  })
 
-  await conn.simpleQuery("CREATE TABLE cats ( name text );");
-  const desc = await conn.describe(cats);
-  const res = await conn.simpleQuery("SELECT * FROM cats");
+  await conn.simpleQuery("CREATE TABLE cats ( name text )")
+  const desc = await conn.describe("cats")
+  const res = await conn.extendedQuery("SELECT * FROM cats WHERE name = $1", ["Cas"])
 
-  console.log(desc);
-  return res;
-};
+  console.log(desc)
+  return res
+}
 ```
 
 ## Why?
