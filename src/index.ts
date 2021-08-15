@@ -3,13 +3,13 @@ import { log } from "./utils"
 
 const createDb = async (conn: Conn) => {
   const createRes = await conn.simpleQuery(
-    "CREATE TABLE cats ( name text, age int, cute boolean );"
+    "CREATE TABLE cats ( name text, age int, cheeky boolean );"
   )
   console.log(createRes)
 
   const insertsRes = await conn.simpleQuery(`
-    INSERT INTO cats (name, age, cute) values ('Cascat', 8, true);
-    INSERT INTO cats (name, age, cute) values ('Luna', 7, true);
+    INSERT INTO cats (name, age, cheeky) values ('Cas', 8, true);
+    INSERT INTO cats (name, age, cheeky) values ('Luna', 7, false);
   `)
   console.log(insertsRes)
 }
@@ -25,7 +25,7 @@ const simplyQuery = async (conn: Conn) => {
 }
 
 const extendedQuery = async (conn: Conn) => {
-  const res = await conn.extendedQuery("SELECT * FROM cats WHERE name = $1", ["Cascat"])
+  const res = await conn.extendedQuery("SELECT * FROM cats WHERE name = $1", ["Cas"])
   console.log(res)
 }
 

@@ -9,6 +9,26 @@ Currently, it does not support:
 - parsing all types, e.g. JSON, arrays
 - all authentication methods
 
+## Example
+```typescript
+const main = async () => {
+  const conn = await Conn.init({
+    host: "localhost",
+    port: 5432,
+    database: "dbname",
+    user: "michael",
+    password: "cascat",
+  });
+
+  await conn.simpleQuery("CREATE TABLE cats ( name text );");
+  const desc = await conn.describe(cats);
+  const res = await conn.simpleQuery("SELECT * FROM cats");
+
+  console.log(desc);
+  return res;
+};
+```
+
 ## Why?
 For personal education, to learn more about Postgres and as a prepatory study for [casql](https://github.com/meraymond2/casql). It is not intended for serious use.
 
