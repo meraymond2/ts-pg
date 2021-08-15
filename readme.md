@@ -1,19 +1,29 @@
-# Running Locally
+# ts-pg
+A Postgres client library in TypeScript.
+
+It only implements a subset of features, but enough that would allow a client application to query a Postgres database.
+
+Currently, it does not support:
+- transactions
+- copying
+- parsing all types, e.g. JSON, arrays
+- all authentication methods
+
+## Why?
+For personal education, to learn more about Postgres and as a prepatory study for [casql](https://github.com/meraymond2/casql). It is not intended for serious use.
+
+## Running Locally
+There are example commands in `index.ts`.
 ```
-# MD5 Auth
+# Start a Postgres container
 docker run --rm --name pgdb -p 5432:5432 -e POSTGRES_USER=michael -e POSTGRES_PASSWORD=cascat -e POSTGRES_DB=dbname postgres:13
 
-# No Auth
-docker run --rm --name pgdb -p 5432:5432 -e POSTGRES_USER=michael -e POSTGRES_PASSWORD=cascat -e POSTGRES_DB=dbname -e POSTGRES_HOST_AUTH_METHOD=trust postgres:13
-
-# Cleartext
-docker run --rm --name pgdb -p 5432:5432 -e POSTGRES_USER=michael -e POSTGRES_PASSWORD=cascat -e POSTGRES_DB=dbname -e POSTGRES_HOST_AUTH_METHOD=password postgres:13
-
-# SHA 246 Auth (don’t know what this is)
-docker run --rm --name pgdb -p 5432:5432 -e POSTGRES_USER=michael -e POSTGRES_PASSWORD=cascat -e POSTGRES_DB=dbname -e POSTGRES_HOST_AUTH_METHOD=scram-sha-256 -e POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 postgres:13
+# Run the entrypoint
+npm install
+npm start
 ```
 
-# Documentation
+## Documentation
 https://www.postgresql.org/docs/current/protocol.html
 https://www.postgresql.org/docs/current/protocol-flow.html
 https://www.postgresql.org/docs/current/protocol-message-formats.html
