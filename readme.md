@@ -1,13 +1,3 @@
-To do:
-- Return the query result — the question is whether I use hard-coded types, or query the `pg_type` table on startup.
-- Figure out if I can get the results in binary rather than text, it feels a little inefficient. — I think I can, but only for extended queries. Will continue to look.
-
-https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
-The rust pkg auto generates the rust code from this file.
-
-Notes:
-- I'm pretty sure that it is a single query at a time per connection. In Rust, it would be easier to prevent asking another query without waiting on the first, because you could consume the client each time. In JS, I could probably implement a FIFO queue?
-
 # Running Locally
 ```
 # MD5 Auth

@@ -1,44 +1,53 @@
 import { log } from "./utils"
-import { TSType } from "./text_pg_types"
+import { toInt, toStr } from "./binary"
 
-export const parseBinVal = (val: Uint8Array | null, oid: number): TSType => {
+export type FormatCode = "text" | "binary"
+export type TSType = string | number | boolean | null | Uint8Array | TSType[]
+
+export const parseVal = (val: Uint8Array | null, oid: number, format: FormatCode): TSType => {
+  if (val === null) return null
+
   const parser = oidToParser[oid] || parseUnknown(oid)
-  return val ? parser(val) : val
+  return parser(val, format)
 }
 
-const parseBool = (bytes: Uint8Array): boolean => bytes[0] === 0x01
-const keepAsBytes = (bytes: Uint8Array) => bytes
-const parseString = (bytes: Uint8Array): string => {
-  const decoder = new TextDecoder("utf-8")
-  return decoder.decode(new Uint8Array(bytes))
-}
-const parseInt = (bytes: Uint8Array): number =>
-  bytes.reduce((acc, byte, idx) => acc | (byte << ((bytes.length - 1 - idx) * 8)), 0)
+const parseBool = (val: Uint8Array, format: FormatCode): boolean =>
+  format === "binary" ? toInt(val) === 1 : toStr(val) === "t"
 
 const parseUnknown =
   (oid: number) =>
-  (bytes: Uint8Array): string => {
+  (val: Uint8Array, format: FormatCode): Uint8Array | string => {
     log.info(`Unhandled type ${oid}`)
-    return parseString(bytes)
+    return format === "binary" ? val : toStr(val)
   }
 
-// The oids for the built in types are stable enough, so they’re
-// hard-coded.
-const oidToParser: Record<number, (bytes: Uint8Array) => TSType> = {
+const parseStr = (val: Uint8Array, _format: FormatCode): string => toStr(val)
+
+const parseInteger = (val: Uint8Array, format: FormatCode): number =>
+  format === "binary" ? toInt(val) : parseInt(toStr(val))
+
+/*
+The oids for the built in types are stable enough, so they’re hard-coded.
+For some types though, it could be worth attempting to parse based on the
+typname, like Postgis `geometry`.
+
+TODO: Fill in more parsers, at least for common types like floats, JSON and arrays.
+*/
+const oidToParser: Record<number, (val: Uint8Array, format: FormatCode) => TSType> = {
   16: parseBool, // bool
-  17: keepAsBytes, // bytea
-  18: parseString, // char
-  19: parseString, // name
-  20: parseInt, // int8
-  21: parseInt, // int2
+  17: parseStr, // bytea
+  18: parseStr, // char
+  19: parseStr, // name
+  20: parseInteger, // int8
+  21: parseInteger, // int2
   22: parseUnknown(22), // int2vector
-  23: parseInt, // int4
-  24: parseString, // regproc (function name)
-  25: parseString, // text
-  26: parseInt, // oid
-  27: parseInt, // tid
-  28: parseInt, // xid
-  29: parseInt, // cid
+  23: parseInteger, // int4
+  24: parseStr, // regproc (function name)
+  25: parseStr, // text
+  26: parseInteger, // oid
+  27: parseInteger, // tid
+  28: parseInteger, // xid
+  29: parseInteger, // cid
   30: parseUnknown(30), // oidvector
   32: parseUnknown(32), // pg_ddl_command
   71: parseUnknown(71), // pg_type
@@ -102,7 +111,7 @@ const oidToParser: Record<number, (bytes: Uint8Array) => TSType> = {
   1040: parseUnknown(1040), // _macaddr
   1041: parseUnknown(1041), // _inet
   1042: parseUnknown(1042), // bpchar
-  1043: parseString, // varchar
+  1043: parseStr, // varchar
   1082: parseUnknown(1082), // date
   1083: parseUnknown(1083), // time
   1114: parseUnknown(1114), // timestamp

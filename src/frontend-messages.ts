@@ -1,4 +1,4 @@
-import { TSType } from "./text_pg_types"
+import { FormatCode, TSType } from "./pg-types"
 
 export type Msg =
   | StartupMessage
@@ -40,8 +40,6 @@ export type Describe = {
   describe: "statement" | "portal"
   name: string
 }
-
-type FormatCode = "text" | "binary"
 
 export type Bind = {
   _tag: "Bind"

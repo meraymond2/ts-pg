@@ -1,10 +1,8 @@
-import * as States from "./states"
+import { Md5 } from "ts-md5"
 import * as Backend from "./backend-messages"
-import { fromPasswordRequested, fromUnitialised } from "./transitions"
-import { hashMd5 } from "./utils"
 import { Channel } from "./channel"
-import { TSType, parseTextVal } from "./text_pg_types"
-import { parseBinVal } from "./bin_pg_types"
+import * as States from "./conn-state"
+import { parseVal, TSType } from "./pg-types"
 
 type Config = {
   host: string
@@ -21,13 +19,13 @@ export class Connection {
   private state: States.State
 
   constructor(user: string, database: string | undefined) {
-    this.channel = new Channel(true)
+    this.channel = new Channel()
     this.state = { _tag: "Uninitialised", user, database }
   }
 
   // TODO: don't write query if there are other queries already in flight
   // TODO: error if trying to query when channel is closed
-  query = async (sql: string): Promise<Row[]> => {
+  simpleQuery = async (sql: string): Promise<Row[]> => {
     this.channel.write({
       _tag: "Query",
       query: sql,
@@ -56,7 +54,7 @@ export class Connection {
               msg.values.reduce(
                 (fieldAcc, value, idx) => ({
                   ...fieldAcc,
-                  [fields[idx].fieldName]: parseTextVal(value, fields[idx].dataTypeOid),
+                  [fields[idx].fieldName]: parseVal(value, fields[idx].dataTypeOid, "text"),
                 }),
                 {}
               )
@@ -74,18 +72,18 @@ export class Connection {
     this.channel.write({
       _tag: "Parse",
       query: sql,
-      name: "",
-      types: [],
+      name: "", // only using the statement once, so no need to name
+      types: [], // let Postgres infer the types
     })
     this.channel.write({
       _tag: "Describe",
       describe: "statement",
-      name: "",
+      name: "", // describe the above statement, to get the row descriptions
     })
     this.channel.write({
       _tag: "Bind",
       params,
-      portal: "",
+      portal: "", // only using the portal once, so no need to name
       stmt: "",
       paramFormats: ["text"], // just one, to specify all params are text
       resultFormats: ["binary"], // just one, to specify all results are binary
@@ -93,7 +91,7 @@ export class Connection {
     this.channel.write({
       _tag: "Execute",
       portal: "",
-      maxRows: 0,
+      maxRows: 0, // 0 means no limit on rows
     })
     this.channel.write({
       _tag: "Sync",
@@ -115,7 +113,7 @@ export class Connection {
             msg.values.reduce(
               (fieldAcc, value, idx) => ({
                 ...fieldAcc,
-                [fields[idx].fieldName]: parseBinVal(value, fields[idx].dataTypeOid),
+                [fields[idx].fieldName]: parseVal(value, fields[idx].dataTypeOid, "binary"),
               }),
               {}
             )
@@ -129,7 +127,7 @@ export class Connection {
   }
 
   describe = async (tableName: string): Promise<Row[]> =>
-    this.query(`
+    this.simpleQuery(`
     SELECT column_name AS field, data_type AS type, column_default AS default, is_nullable AS nullable
     FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '${tableName}';
     `)
@@ -163,7 +161,7 @@ export class Connection {
       "AuthenticationCleartextPassword",
       "ReadyForQuery",
     ])
-    return fromUnitialised(this.state, msgs)
+    return States.fromUnitialised(this.state, msgs)
   }
 
   private sendPassword = async (
@@ -179,7 +177,7 @@ export class Connection {
           : password,
     })
     const msgs = await this.readUntil(["ReadyForQuery"])
-    return fromPasswordRequested(this.state, msgs)
+    return States.fromPasswordRequested(this.state, msgs)
   }
 
   private readUntil = async (terminals: string[]): Promise<Backend.Msg[]> => {
@@ -192,4 +190,16 @@ export class Connection {
     }
     return msgs
   }
+}
+
+export const hashMd5 = (user: string, password: string, salt: Uint8Array): string => {
+  let hash = new Md5()
+  hash.appendAsciiStr(password)
+  hash.appendAsciiStr(user)
+  let hashed: string = hash.end() as string
+  hash = new Md5()
+  hash.appendStr(hashed)
+  hash.appendByteArray(salt)
+  hashed = hash.end() as string
+  return "md5" + hashed
 }

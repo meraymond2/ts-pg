@@ -1,18 +1,26 @@
 import { Connection as Conn } from "./connection"
+import { log } from "./utils"
 
 const createDb = async (conn: Conn) => {
-  const createRes = await conn.query("CREATE TABLE cats ( name text, age int, fluffy boolean );")
+  const createRes = await conn.simpleQuery(
+    "CREATE TABLE cats ( name text, age int, cute boolean );"
+  )
   console.log(createRes)
 
-  const insertsRes = await conn.query(`
-    INSERT INTO cats (name, age, fluffy) values ('Cascat', 8, true);
-    INSERT INTO cats (name, age, fluffy) values ('Luna', 7, true);
+  const insertsRes = await conn.simpleQuery(`
+    INSERT INTO cats (name, age, cute) values ('Cascat', 8, true);
+    INSERT INTO cats (name, age, cute) values ('Luna', 7, true);
   `)
   console.log(insertsRes)
 }
 
+const describe = async (conn: Conn) => {
+  const descRes = await conn.describe("cats")
+  console.log(descRes)
+}
+
 const simplyQuery = async (conn: Conn) => {
-  const res = await conn.query("SELECT * FROM cats")
+  const res = await conn.simpleQuery("SELECT * FROM cats")
   console.log(res)
 }
 
@@ -30,9 +38,10 @@ const main = async () => {
     password: "cascat",
   })
 
-  // await createDb(conn)
-  await simplyQuery(conn)
+  await createDb(conn)
+  await describe(conn)
+  // await simplyQuery(conn)
   // await extendedQuery(conn)
 }
 
-main()
+main().catch(log.error)

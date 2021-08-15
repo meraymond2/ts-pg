@@ -1,7 +1,8 @@
 import * as Net from "net"
 import * as Backend from "./backend-messages"
 import * as Frontend from "./frontend-messages"
-import { bytesToInt32, log } from "./utils"
+import { log } from "./utils"
+import * as Binary from "./binary"
 
 type ReadCallback = (msg: Backend.Msg) => void
 
@@ -59,9 +60,8 @@ export class Channel {
   private parseData = (bytes: Uint8Array): void => {
     let remaining = Buffer.concat([this.buffer, bytes])
     while (remaining.length >= 5) {
-      const msgLength = bytesToInt32(remaining.slice(1, 5))
+      const msgLength = Binary.toInt(remaining.slice(1, 5))
       if (remaining.length < 1 + msgLength) break
-
       const msgBytes = remaining.slice(0, 1 + msgLength)
       const msg = Backend.deserialise(msgBytes)
       remaining = remaining.slice(1 + msgLength)

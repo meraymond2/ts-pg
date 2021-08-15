@@ -1,4 +1,4 @@
-import { bytesToInt16, bytesToInt32 } from "./utils"
+import { toInt, toStr } from "./binary"
 
 export type Msg =
   | AuthenticationMD5Password
@@ -195,9 +195,9 @@ const deserialiseAuthenticationOk = (bytes: Uint8Array): AuthenticationOk => ({
  * String Parameter Value
  */
 const deserialiseParameterStatus = (bytes: Uint8Array): ParameterStatus => {
-  const arr = Array.from(bytes.slice(5))
-  const name = consumeCStr(arr)
-  const value = consumeCStr(arr)
+  let pos = { pos: 5 }
+  const name = consumeCStr(bytes, pos)
+  const value = consumeCStr(bytes, pos)
   return {
     _tag: "ParameterStatus",
     name,
@@ -212,9 +212,9 @@ const deserialiseParameterStatus = (bytes: Uint8Array): ParameterStatus => {
  * Int32 Secret Key
  */
 const deserialiseBackendKeyData = (bytes: Uint8Array): BackendKeyData => {
-  const arr = Array.from(bytes.slice(5))
-  const pid = consumeInt32(arr)
-  const secretKey = consumeInt32(arr)
+  let pos = { pos: 5 }
+  const pid = consumeInt32(bytes, pos)
+  const secretKey = consumeInt32(bytes, pos)
   return {
     _tag: "BackendKeyData",
     pid,
@@ -246,18 +246,18 @@ const deserialiseReadyForQuery = (bytes: Uint8Array): ReadyForQuery => ({
  * Int16 Format Code
  */
 const deserialiseRowDescription = (bytes: Uint8Array): RowDescription => {
-  const arr = Array.from(bytes.slice(5))
-  const fieldCount = consumeInt16(arr)
+  let pos = { pos: 5 }
+  const fieldCount = consumeInt16(bytes, pos)
   let fields: FieldDescription[] = []
   let i = 0
   while (i < fieldCount) {
-    const fieldName = consumeCStr(arr)
-    const tableOid = consumeInt32(arr)
-    const column = consumeInt16(arr)
-    const dataTypeOid = consumeInt32(arr)
-    const dataTypeSize = consumeInt16(arr)
-    const typeModifier = consumeInt32(arr)
-    const formatCode = consumeInt16(arr)
+    const fieldName = consumeCStr(bytes, pos)
+    const tableOid = consumeInt32(bytes, pos)
+    const column = consumeInt16(bytes, pos)
+    const dataTypeOid = consumeInt32(bytes, pos)
+    const dataTypeSize = consumeInt16(bytes, pos)
+    const typeModifier = consumeInt32(bytes, pos)
+    const formatCode = consumeInt16(bytes, pos)
     fields.push({
       fieldName,
       tableOid,
@@ -275,13 +275,21 @@ const deserialiseRowDescription = (bytes: Uint8Array): RowDescription => {
   }
 }
 
+/**
+ * Int8 't'
+ * Int32 Length
+ * Int16 Number of Values
+ * Int32[] Oids
+ * Int32 Value Length (NULL is -1)
+ * Bytes Column Value
+ */
 const deserialiseParameterDescription = (bytes: Uint8Array): ParameterDescription => {
-  const arr = Array.from(bytes.slice(5))
-  const paramCount = consumeInt16(arr)
+  let pos = { pos: 5 }
+  const paramCount = consumeInt16(bytes, pos)
   let i = 0
   let oids = []
   while (i < paramCount) {
-    oids.push(consumeInt32(arr))
+    oids.push(consumeInt32(bytes, pos))
     i = i + 1
   }
   return {
@@ -299,16 +307,16 @@ const deserialiseParameterDescription = (bytes: Uint8Array): ParameterDescriptio
  * Bytes Column Value
  */
 const deserialiseDataRow = (bytes: Uint8Array): DataRow => {
-  const arr = Array.from(bytes.slice(5))
-  const rowCount = consumeInt16(arr)
+  let pos = { pos: 5 }
+  const rowCount = consumeInt16(bytes, pos)
   let values: Array<null | Uint8Array> = []
   let i = 0
   while (i < rowCount) {
-    const len = consumeInt32(arr)
+    const len = consumeInt32(bytes, pos)
     if (len === -1) {
       values.push(null)
     } else {
-      values.push(new Uint8Array(arr.splice(0, len)))
+      values.push(consumeBytes(bytes, len, pos))
     }
     i = i + 1
   }
@@ -341,10 +349,10 @@ const deserialiseBindComplete = (bytes: Uint8Array): BindComplete => {
  * String Name
  */
 const deserialiseClose = (bytes: Uint8Array): Close => {
-  const arr = Array.from(bytes.slice(5))
-  const type = consumeStr(arr, 1)
+  let pos = { pos: 5 }
+  const type = toStr(consumeBytes(bytes, 1, pos))
   // The name appears to include the fifth byte.
-  const name = type + consumeCStr(arr)
+  const name = type + consumeCStr(bytes, pos)
   return {
     _tag: "Close",
     type: type === "S" ? "statement" : "portal",
@@ -368,12 +376,12 @@ const deserialiseEmptyQueryResponse = (_bytes: Uint8Array): EmptyQueryResponse =
  * Null Terminator
  */
 const deserialiseErrorResponse = (bytes: Uint8Array): ErrorResponse => {
-  const arr = Array.from(bytes.slice(5))
+  let pos = { pos: 5 }
   let fields: Record<string, string> = {}
 
-  while (arr.length > 1) {
-    const fieldId = String.fromCharCode(arr.shift() as number)
-    const value = consumeCStr(arr)
+  while (pos.pos < bytes.length - 1) {
+    const fieldId = toStr(consumeBytes(bytes, 1, pos))
+    const value = consumeCStr(bytes, pos)
     const key: string | undefined = errorFields[fieldId]
     if (key) fields[key] = value
   }
@@ -387,33 +395,33 @@ const deserialiseErrorResponse = (bytes: Uint8Array): ErrorResponse => {
 /******************************************************************************/
 
 // Mutating helpers, to avoid having to keep track of positions everywhere.
-// I don’t like these, I’d prefer to use slices of the Uint8Array, but I also
-// don’t want to assign a new pos var after each slice. Hmmm.
-const consumeCStr = (byteArr: number[]): string => {
-  let i = 0
-  while (byteArr[i] !== 0x00) {
-    i = i + 1
+// It's a little hacky, especially faking the number point.
+const consumeCStr = (bytes: Uint8Array, pos: { pos: number }): string => {
+  const start = pos.pos
+  while (bytes[pos.pos] !== 0x00) {
+    pos.pos++
   }
-  const strBytes = byteArr.splice(0, i)
-  byteArr.shift() // null terminator
-  const decoder = new TextDecoder("utf-8")
-  return decoder.decode(new Uint8Array(strBytes))
+  const strBytes = bytes.slice(start, pos.pos)
+  pos.pos++ // null terminator
+  return toStr(strBytes)
 }
 
-const consumeStr = (byteArr: number[], len: number): string => {
-  const strBytes = byteArr.splice(0, len)
-  const decoder = new TextDecoder("utf-8")
-  return decoder.decode(new Uint8Array(strBytes))
+const consumeInt32 = (bytes: Uint8Array, pos: { pos: number }): number => {
+  const intBytes = bytes.slice(pos.pos, pos.pos + 4)
+  pos.pos = pos.pos + 4
+  return toInt(intBytes)
 }
 
-const consumeInt32 = (byteArr: number[]): number => {
-  const intBytes = byteArr.splice(0, 4)
-  return bytesToInt32(intBytes)
+const consumeInt16 = (bytes: Uint8Array, pos: { pos: number }): number => {
+  const intBytes = bytes.slice(pos.pos, pos.pos + 2)
+  pos.pos = pos.pos + 2
+  return toInt(intBytes)
 }
 
-const consumeInt16 = (byteArr: number[]): number => {
-  const intBytes = byteArr.splice(0, 2)
-  return bytesToInt16(intBytes)
+const consumeBytes = (bytes: Uint8Array, len: number, pos: { pos: number }): Uint8Array => {
+  const start = pos.pos
+  pos.pos = pos.pos + len
+  return bytes.slice(start, pos.pos)
 }
 
 // https://www.postgresql.org/docs/current/protocol-error-fields.html
