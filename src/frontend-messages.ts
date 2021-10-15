@@ -166,7 +166,7 @@ const serialiseBind = (msg: Bind): Uint8Array =>
   ])
 
 /**
- * Int8 'E'
+ * Int8 'D'
  * Int32 Length
  * Int8 'S' or 'P': Stmt or Portal
  * CString Name
