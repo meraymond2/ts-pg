@@ -361,7 +361,7 @@ const deserialiseClose = (bytes: Uint8Array): Close => {
 }
 
 /**
- * Int8 'C'
+ * Int8 'I'
  * Int32 Length
  */
 const deserialiseEmptyQueryResponse = (_bytes: Uint8Array): EmptyQueryResponse => ({
